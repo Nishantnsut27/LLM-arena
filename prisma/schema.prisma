@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  threads   Thread[]
+  votes     Vote[]
+}
+
+model Thread {
+  id        String    @id @default(cuid())
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages  Message[]
+  votes     Vote[]
+}
+
+model Message {
+  id               String   @id @default(cuid())
+  threadId         String
+  thread           Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role             String   // "user" or "assistant"
+  content          String
+  model            String?  // null for user messages, specifies the AI model used for assistant messages
+  timeToFirstToken Int?     // in ms
+  tokensPerSecond  Float?
+  totalTokens      Int?
+  createdAt        DateTime @default(now())
+}
+
+model Vote {
+  id          String   @id @default(cuid())
+  threadId    String
+  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  promptText  String   // the user prompt that led to this vote
+  winnerModel String   // the model that won the turn
+  createdAt   DateTime @default(now())
+}

@@ -9,19 +9,32 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arcjet/next": "^1.9.1",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "ai": "^7.0.58",
+    "dotenv": "^17.4.2",
     "next": "16.3.0",
+    "pg": "^8.22.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^10.8.1",
     "eslint-config-next": "16.3.0",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "prisma": "^7.9.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.11",
+    "typescript": "^7.0.2"
   },
-  "packageManager": "pnpm@10.18.3"
+  "packageManager": "pnpm@10.18.3",
+  "allowScripts": {
+    "@prisma/cli-dev": true
+  }
 }

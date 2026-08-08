@@ -1,69 +1,232 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useRef, useState } from "react";
+
+const DEFAULT_MODELS = [
+  "meta-llama/llama-3.1-8b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "google/gemini-2.0-flash-exp:free",
+];
+
+type ModelRuntime = {
+  text: string;
+  status: "idle" | "streaming" | "done" | "error";
+  errorText: string | null;
+  firstTokenMs: number | null;
+  tokensPerSecond: number | null;
+  totalTokens: number | null;
+};
+
+type FinishMetadata = {
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  timingMs?: number;
+  firstTokenMs?: number | null;
+  tokensPerSecond?: number | null;
+};
+
+type ModelMetadata = FinishMetadata;
+
+const emptyRun = (): ModelRuntime => ({
+  text: "",
+  status: "idle",
+  errorText: null,
+  firstTokenMs: null,
+  tokensPerSecond: null,
+  totalTokens: null,
+});
+
+function parseStreamPart(data: string): Record<string, unknown> | null {
+  if (data === "[DONE]") return null;
+  try {
+    return JSON.parse(data) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
+  const [prompt, setPrompt] = useState("");
+  const [models, setModels] = useState<string[]>(DEFAULT_MODELS);
+  const [runs, setRuns] = useState<ModelRuntime[]>(models.map(emptyRun));
+  const [sending, setSending] = useState(false);
+  const abortRefs = useRef<AbortController[]>([]);
+
+  const patchRun = useCallback(
+    (index: number, patch: Partial<ModelRuntime> | ((prev: ModelRuntime) => Partial<ModelRuntime>)) => {
+      setRuns(prev =>
+        prev.map((run, i) =>
+          i === index ? { ...run, ...(typeof patch === "function" ? patch(run) : patch) } : run,
+        ),
+      );
+    },
+    [],
+  );
+
+  const send = useCallback(async () => {
+    if (prompt.trim().length === 0 || sending) return;
+
+    setSending(true);
+    setRuns(models.map(emptyRun));
+
+    const controllers = models.map(() => new AbortController());
+    abortRefs.current = controllers;
+
+    await Promise.all(
+      models.map(async (model, index) => {
+        const startedAt = performance.now();
+        let firstTokenAt: number | null = null;
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: "user", content: prompt }],
+            }),
+            signal: controllers[index].signal,
+          });
+
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as { error?: string } | null;
+            patchRun(index, {
+              status: "error",
+              errorText: body?.error ?? "That request didn't go through, please try again.",
+            });
+            return;
+          }
+
+          if (!response.body) {
+            patchRun(index, { status: "error", errorText: "No answer came back, please try again." });
+            return;
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let separatorIndex: number;
+            while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
+              const raw = buffer.slice(0, separatorIndex);
+              buffer = buffer.slice(separatorIndex + 2);
+              const line = raw.trim();
+              if (!line.startsWith("data: ")) continue;
+
+              const chunk = parseStreamPart(line.slice(6));
+              if (chunk === null) continue;
+
+              if (chunk.type === "text-delta") {
+                if (firstTokenAt === null) firstTokenAt = performance.now();
+                const tokenAt = firstTokenAt;
+                patchRun(index, prev => ({
+                  status: "streaming",
+                  firstTokenMs: tokenAt - startedAt,
+                  text: prev.text + String(chunk.delta ?? ""),
+                }));
+              } else if (chunk.type === "error") {
+                patchRun(index, {
+                  status: "error",
+                  errorText: String(chunk.errorText ?? "That model couldn't finish, please try again."),
+                });
+              } else if (chunk.type === "finish") {
+                const metadata = (chunk.messageMetadata ?? {}) as ModelMetadata;
+                patchRun(index, {
+                  status: "done",
+                  totalTokens: metadata.usage?.totalTokens ?? null,
+                  tokensPerSecond: metadata.tokensPerSecond ?? null,
+                  firstTokenMs: metadata.firstTokenMs ?? null,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          if ((error as Error).name === "AbortError") return;
+          patchRun(index, {
+            status: "error",
+            errorText: "That model couldn't answer right now. Please try again.",
+          });
+        }
+      }),
+    );
+
+    setSending(false);
+  }, [models, prompt, sending, patchRun]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="flex flex-1 flex-col gap-6 p-6">
+      <h1 className="text-2xl font-semibold">LLM Arena</h1>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="prompt" className="text-sm font-medium">
+          Prompt
+        </label>
+        <textarea
+          id="prompt"
+          value={prompt}
+          onChange={event => setPrompt(event.target.value)}
+          rows={3}
+          className="rounded border border-zinc-300 p-2 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          placeholder="Ask the models anything."
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <div className="flex flex-wrap gap-4">
+          {models.map((model, index) => (
+            <label key={model} className="flex items-center gap-2 text-sm">
+              <input
+                type="text"
+                value={models[index]}
+                onChange={event =>
+                  setModels(prev => prev.map((next, i) => (i === index ? event.target.value : next)))
+                }
+                className="w-64 rounded border border-zinc-300 p-1 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div>
+          <button
+            type="button"
+            onClick={send}
+            disabled={sending || prompt.trim().length === 0}
+            className="rounded bg-zinc-900 px-4 py-2 font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-black"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {sending ? "Running…" : "Run all"}
+          </button>
         </div>
-      </main>
-    </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {models.map((model, index) => {
+          const run = runs[index] ?? emptyRun();
+          return (
+            <section
+              key={model}
+              className="flex min-h-72 flex-col rounded border border-zinc-300 p-4 dark:border-zinc-700"
+            >
+              <h2 className="mb-2 truncate text-sm font-semibold">{model}</h2>
+              <p className="flex-1 whitespace-pre-wrap text-sm leading-6">
+                {run.text || (run.status === "streaming" ? "…" : "")}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {run.status === "error" && <span className="text-red-600 dark:text-red-400">{run.errorText}</span>}
+                {run.status === "done" && run.totalTokens !== null && (
+                  <span>{run.totalTokens} tokens</span>
+                )}
+                {run.status === "done" && run.firstTokenMs !== null && (
+                  <span>first token {run.firstTokenMs} ms</span>
+                )}
+                {run.status === "done" && run.tokensPerSecond !== null && (
+                  <span>{run.tokensPerSecond} tok/s</span>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </main>
   );
 }

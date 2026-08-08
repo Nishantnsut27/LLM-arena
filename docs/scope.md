@@ -18,10 +18,10 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 
 | #   | Feature                                     | Phase      | Status      |
 | --- | ------------------------------------------- | ---------- | ----------- |
-| 1   | Connecting to a model                       | Foundation | not started |
-| 2   | Coding standards & tooling                  | Foundation | not started |
-| 3   | Data model                                  | Foundation | not started |
-| 4   | Design & look                               | Foundation | not started |
+| 1   | Connecting to a model                       | Foundation | done        |
+| 2   | Coding standards & tooling                  | Foundation | done        |
+| 3   | Data model                                  | Foundation | done        |
+| 4   | Design & look                               | Foundation | done        |
 | 5   | Model picker                                | Slice 1    | not started |
 | 6   | Send a prompt, parallel streams, and voting | Slice 1    | not started |
 | 7   | App shell & thread history                  | Slice 2    | not started |
@@ -38,8 +38,20 @@ Two real decisions still open once that exists: how the app calls OpenRouter to 
 
 PostHog should be wired in from the start too, session replay and heatmaps turned on, and tied to the signed-in user once Clerk resolves, so events are attached to a real person, not left anonymous.
 
-- [ ] Decide the approach
+- [x] Decide the approach
 - [ ] Write the spec
+
+**Spec & Decisions (Locked)**
+- **Call path**: Vercel AI SDK `streamText` + `@openrouter/ai-sdk-provider` (`createOpenRouter`), key from `OPENROUTER_API_KEY`, fail-fast at startup if missing. Chosen over raw fetch because `@posthog/ai` wraps AI SDK directly (needed for LLM analytics in Feature 6).
+- **Streaming**: one independent `POST /api/chat` per model (cap 3), each carrying a single model id, one independent stream each. No shared/multiplexed connection — a dropped/failed model never blocks the others.
+- **Metadata**: token/timing numbers ride inside the stream (final `finish` frame), so the response card and future DB row read identical measured values.
+- **Deferred to Feature 6**: PostHog/OTel wiring, Prisma, Clerk, Arcjet all untouched for now.
+
+**Build Checklist**
+- [x] 1. `pnpm exec tsc --noEmit`
+- [x] 2. `pnpm lint`, then `pnpm build`
+- [ ] 3. Fill `OPENROUTER_API_KEY` in `.env.local`
+- [ ] 4. `pnpm dev` + `curl` the route to verify SSE streaming works end-to-end
 
 ### 2. Coding standards & tooling
 
@@ -52,15 +64,15 @@ Write down the real conventions for this project once it actually exists, then i
 
 The core things every feature depends on: users tied to Clerk, threads, each model's own messages inside a thread, and votes. A vote should only ever be possible on a turn where two or more models actually answered.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Build it
 
 ### 4. Design & look
 
 A coffee or dark brown background, warm, not neutral gray or true black. One accent color, rust, used only for things you interact with, buttons, links, focus states, the win-rate bar, never as decoration. Because the background and the accent are both warm tones from the same family, the accent has to stay clearly brighter and more saturated than the background, enough that a button never blends into the page behind it, that's a real risk with two warm colors this close and worth checking by eye, not just by the numbers. Blue, indigo, and purple are never the accent, under any circumstance. Green is reserved only for marking a winner, red only for errors, never reused for anything else. Contrast should genuinely hold up in both light and dark mode, not just look fine at a glance.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Build it
 
 ## Slice 1: Core arena loop
 
