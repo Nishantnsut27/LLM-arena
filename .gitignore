@@ -64,3 +64,6 @@ Thumbs.db
 # Ignore other package managers (this project uses pnpm)
 package-lock.json
 yarn.lock
+
+.husky
+.prettierrc

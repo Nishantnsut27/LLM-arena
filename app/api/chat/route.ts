@@ -9,6 +9,7 @@ import {
 import { requireEnv } from "@/lib/env";
 import { aj } from "@/lib/arcjet";
 import { slidingWindow, detectPromptInjection } from "@arcjet/next";
+import { auth } from "@clerk/nextjs/server";
 
 const routeAj = aj.withRule(
   slidingWindow({
@@ -56,6 +57,14 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({ error: "The request body couldn't be read, please try again." }),
       { status: 400, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized. Please sign in." }),
+      { status: 401, headers: { "content-type": "application/json" } }
     );
   }
 
