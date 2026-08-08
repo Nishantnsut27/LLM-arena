@@ -41,3 +41,26 @@ yarn-error.log*
 next-env.d.ts
 
  
+
+/lib/generated/prisma
+
+# IDEs and Editors
+.vscode/
+.idea/
+.claude/
+.windsurf/
+*.swp
+*.swo
+
+# AI Tooling
+.agents/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
+
+# OS files
+Thumbs.db
+
+# Ignore other package managers (this project uses pnpm)
+package-lock.json
+yarn.lock
