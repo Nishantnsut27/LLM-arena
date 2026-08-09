@@ -21,9 +21,11 @@ export const streamModelAnswer = async (params: {
   readonly turnId: string;
   readonly messages: any[];
   readonly onTextUpdate: (text: string) => void;
+  readonly onMetricsUpdate?: (metrics: ModelMetrics) => void;
   readonly onDone: (status: StreamOutcome, metrics: ModelMetrics | null) => void;
 }): Promise<void> => {
   try {
+    const startTime = Date.now();
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -52,6 +54,7 @@ export const streamModelAnswer = async (params: {
 
     let failed = false;
     let metrics: ModelMetrics | null = null;
+    let ttft: number | null = null;
 
     const messageStream = readUIMessageStream<UIMessage>({
       stream: chunkStream,
@@ -61,9 +64,27 @@ export const streamModelAnswer = async (params: {
     });
 
     for await (const message of messageStream) {
-      params.onTextUpdate(extractText(message));
+      const text = extractText(message);
+      
+      if (text.length > 0 && ttft === null) {
+        ttft = Date.now() - startTime;
+      }
+      
+      const secondsElapsed = (Date.now() - startTime) / 1000;
+      const approxTokens = Math.max(1, Math.floor(text.length / 4));
+      const tps = secondsElapsed > 0.5 ? approxTokens / secondsElapsed : null;
+
+      params.onTextUpdate(text);
+
       if (message.metadata) {
         metrics = message.metadata as ModelMetrics;
+        if (params.onMetricsUpdate) params.onMetricsUpdate(metrics);
+      } else if (params.onMetricsUpdate && ttft !== null) {
+        params.onMetricsUpdate({
+          timeToFirstToken: ttft,
+          tokensPerSecond: tps ? parseFloat(tps.toFixed(2)) : null,
+          totalTokens: approxTokens
+        });
       }
     }
 

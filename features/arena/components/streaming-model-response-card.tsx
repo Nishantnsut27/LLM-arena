@@ -49,6 +49,9 @@ export function StreamingModelResponseCard({
         onTextUpdate: (newText) => {
           setText(newText);
         },
+        onMetricsUpdate: (liveMetrics) => {
+          setMetrics(liveMetrics);
+        },
         onDone: (outcome, finalMetrics) => {
           setStatus(outcome === "COMPLETE" ? "complete" : "failed");
           if (finalMetrics) {

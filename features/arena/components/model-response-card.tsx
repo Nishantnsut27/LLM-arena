@@ -113,22 +113,31 @@ export function ModelResponseCard({
 
       {/* Metrics footer */}
       {status !== "failed" && !error && (
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-border/40 text-[11px] text-muted-foreground bg-background/50">
-          {(status === "streaming" || isLoading) && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              Streaming…
-            </span>
-          )}
-          {timeToFirstToken != null && (
-            <span title="Time to first token">{timeToFirstToken}ms TTFT</span>
-          )}
-          {tokensPerSecond != null && (
-            <span title="Tokens per second">{tokensPerSecond} tok/s</span>
-          )}
-          {totalTokens != null && (
-            <span title="Total tokens">{totalTokens} tokens</span>
-          )}
+        <div className="border-t border-border/40 bg-background/50 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-4">
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">first token</span>
+              <span className={timeToFirstToken != null ? "font-medium text-foreground" : "opacity-50"}>
+                {timeToFirstToken != null ? `${timeToFirstToken} ms` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">speed</span>
+              <span className={tokensPerSecond != null ? "font-medium text-foreground" : "opacity-50"}>
+                {tokensPerSecond != null ? `${tokensPerSecond} tok/s` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">tokens</span>
+              <span className={totalTokens != null ? "font-medium text-foreground" : "opacity-50"}>
+                {totalTokens != null ? totalTokens : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">cost</span>
+              <span className="font-medium text-foreground">$0.0000</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
