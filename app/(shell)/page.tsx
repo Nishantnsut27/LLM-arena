@@ -17,7 +17,7 @@ export default async function ArenaPage() {
 
       {/* Input box pinned to bottom */}
       <div className="bg-background/85 sticky bottom-0 px-4 pt-2 pb-4 backdrop-blur-sm sm:px-6 w-full">
-        <div className="surface mx-auto max-w-4xl p-3">
+        <div className="mx-auto max-w-4xl p-3">
           <ArenaComposer catalog={catalog} />
           <p className="text-center text-xs text-muted-foreground mt-3">
             Up to three models at a time. Every one of them is free.

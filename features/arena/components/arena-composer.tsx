@@ -84,15 +84,15 @@ export function ArenaComposer({ catalog, threadId, defaultSelection }: ArenaComp
   };
 
   return (
-    <div className="border border-border bg-card/30 rounded-2xl overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-primary/50 transition-shadow relative">
+    <div className="border border-border bg-card rounded-2xl overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-primary/50 transition-shadow relative">
       <textarea
         ref={textareaRef}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={isSubmitting || (isSignedIn === false)}
-        className="w-full bg-transparent p-4 pb-12 outline-none resize-none text-foreground placeholder:text-muted-foreground disabled:opacity-50"
-        rows={3}
+        className="w-full bg-transparent p-4 outline-none resize-none text-foreground placeholder:text-muted-foreground disabled:opacity-50 min-h-[56px] max-h-40 overflow-y-auto"
+        rows={1}
         placeholder={isSignedIn === false ? "Sign in to ask a question." : "Ask anything. Enter to send, shift + enter for a new line."}
       />
       

@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { type UIMessage } from "ai";
+import ReactMarkdown from "react-markdown";
 
 export interface ModelResponseCardProps {
   modelId: string;
@@ -72,7 +73,13 @@ export function ModelResponseCard({
       return <span className="text-muted-foreground animate-pulse">Thinking…</span>;
     }
     if (displayContent) {
-      return displayContent;
+      return (
+        <div className="prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted prose-pre:text-muted-foreground max-w-none text-black dark:text-foreground prose-p:text-black dark:prose-p:text-foreground prose-headings:text-black dark:prose-headings:text-foreground prose-strong:text-black dark:prose-strong:text-foreground">
+          <ReactMarkdown>
+            {displayContent}
+          </ReactMarkdown>
+        </div>
+      );
     }
     if (isLoading) {
       return <span className="text-muted-foreground animate-pulse">Thinking…</span>;
@@ -124,7 +131,7 @@ export function ModelResponseCard({
             <div className="flex items-center gap-2">
               <span className="opacity-70">speed</span>
               <span className={tokensPerSecond != null ? "font-medium text-foreground" : "opacity-50"}>
-                {tokensPerSecond != null ? `${tokensPerSecond} tok/s` : "—"}
+                {tokensPerSecond != null ? `${Number(tokensPerSecond).toFixed(1)} tok/s` : "—"}
               </span>
             </div>
             <div className="flex items-center gap-2">

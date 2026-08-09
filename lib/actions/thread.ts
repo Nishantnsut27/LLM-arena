@@ -90,7 +90,15 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
     include: { responses: true }
   });
 
+  // Bump the thread's updatedAt timestamp for recency grouping
+  await prisma.thread.update({
+    where: { id: threadId },
+    data: { updatedAt: new Date() }
+  });
+
   revalidatePath(`/t/${threadId}`);
+  // revalidate layout to update the sidebar
+  revalidatePath(`/`, "layout");
 
   return { turnId: turn.id };
 }

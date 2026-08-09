@@ -9,7 +9,7 @@ export const buildModelMessages = (
     const prompt: UIMessage = { 
       id: `prompt-${turn.id}`, 
       role: "user", 
-      content: turn.prompt 
+      parts: [{ type: "text", text: turn.prompt }]
     };
 
     const answer = turn.responses.find(
@@ -22,7 +22,7 @@ export const buildModelMessages = (
         { 
           id: `answer-${answer.id}`, 
           role: "assistant", 
-          content: answer.text 
+          parts: [{ type: "text", text: answer.text }]
         }
       ];
     }

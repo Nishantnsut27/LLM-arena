@@ -62,8 +62,8 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
       </div>
       
       {/* Floating sticky composer at bottom */}
-      <div className="bg-background/85 sticky bottom-4 px-4 pt-2 pb-4 backdrop-blur-md sm:px-6 w-full max-w-4xl mx-auto rounded-3xl border border-border/50 shadow-lg shadow-black/5 z-10">
-        <div className="surface mx-auto w-full p-2">
+      <div className="sticky bottom-0 px-4 pt-2 pb-4 sm:px-6 w-full max-w-4xl mx-auto z-10 bg-background/95 backdrop-blur-md">
+        <div className="mx-auto w-full p-2">
           <ArenaComposer catalog={catalog} threadId={thread.id} defaultSelection={defaultSelection} />
         </div>
       </div>

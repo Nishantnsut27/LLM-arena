@@ -67,3 +67,6 @@ yarn.lock
 
 .husky
 .prettierrc
+
+demo
+errors.log

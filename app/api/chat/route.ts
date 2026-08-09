@@ -140,10 +140,17 @@ export async function POST(request: Request) {
   try {
     const result = await streamText({
       model: openrouter.chat(body.modelId),
-      messages: body.messages.map((message) => ({
-        role: message.role as "user" | "assistant" | "system",
-        content: message.content,
-      })),
+      messages: body.messages.map((message) => {
+        const content = (message as any).content || 
+          (Array.isArray(message.parts) 
+            ? message.parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("") 
+            : "");
+            
+        return {
+          role: message.role as "user" | "assistant" | "system",
+          content,
+        };
+      }),
       onChunk: ({ chunk }) => {
         if (chunk.type === "text-delta" && firstTokenAt === null) {
           firstTokenAt = performance.now();
@@ -152,7 +159,7 @@ export async function POST(request: Request) {
       onFinish: async ({ text, usage }) => {
         const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
         const ttft = firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt);
-        const tps = streamMs !== null && streamMs > 0 ? (usage.completionTokens / (streamMs / 1000)) : null;
+        const tps = streamMs !== null && streamMs > 0 && usage.outputTokens ? (usage.outputTokens / (streamMs / 1000)) : null;
 
         await prisma.modelResponse.update({
           where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
@@ -160,10 +167,10 @@ export async function POST(request: Request) {
             status: "COMPLETE",
             text,
             timeToFirstToken: ttft,
-            tokensPerSecond: tps,
-            inputTokens: usage.promptTokens,
-            outputTokens: usage.completionTokens,
-            totalTokens: usage.totalTokens,
+            tokensPerSecond: tps ? Number(tps.toFixed(1)) : null,
+            inputTokens: usage.inputTokens ?? 0,
+            outputTokens: usage.outputTokens ?? 0,
+            totalTokens: usage.outputTokens ?? 0,
             completedAt: new Date(),
           }
         }).catch(console.error);
@@ -172,8 +179,8 @@ export async function POST(request: Request) {
 
     const stream = toUIMessageStream({
       stream: result.stream,
-      onError: async () => {
-        await prisma.modelResponse.update({
+      onError: () => {
+        prisma.modelResponse.update({
           where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
           data: { status: "FAILED", completedAt: new Date() }
         }).catch(console.error);
@@ -181,18 +188,14 @@ export async function POST(request: Request) {
       },
       messageMetadata: ({ part }) => {
         if (part.type === "finish") {
-          const timingMs = performance.now() - startedAt;
-          const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = part.totalUsage;
+          const { outputTokens = 0 } = part.totalUsage;
           const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
 
-          const metadata: ModelMetadata = {
-            usage: { inputTokens, outputTokens, totalTokens },
-            timingMs,
-            timeToFirstTokenMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
-            tokensPerSecond: streamMs !== null && streamMs > 0 ? (outputTokens / (streamMs / 1000)) : null,
+          return {
+            timeToFirstToken: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
+            tokensPerSecond: streamMs !== null && streamMs > 0 ? Number((outputTokens / (streamMs / 1000)).toFixed(1)) : null,
+            totalTokens: outputTokens,
           };
-
-          return metadata;
         }
         return undefined;
       },

@@ -4,65 +4,82 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { LogIn, Trophy, Layers, MessageSquare, Menu } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { listThreadHistory } from "@/features/shell/thread-history";
 
 export default async function ShellLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
+  
+  let threadGroups: any[] = [];
+  if (userId) {
+    const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+    if (dbUser) {
+      threadGroups = (await listThreadHistory(dbUser.id)) as any[];
+    }
+  }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-muted/20 overflow-hidden">
       {/* Custom Sidebar */}
-      <aside className="w-[260px] border-r border-border bg-background flex flex-col hidden md:flex">
-        <div className="p-4 py-6">
+      <aside className="w-[260px] border-r border-border bg-background flex flex-col hidden md:flex h-full">
+        <div className="p-4 py-6 shrink-0">
           <Link href="/" className="font-serif text-2xl tracking-tight px-2">
             LLM Arena
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-8">
-          {/* Main Nav */}
-          <div className="space-y-0.5">
-            <NavItem href="/" icon={<Menu size={18} />} label="Arena" active />
-            <NavItem href="/leaderboard" icon={<Trophy size={18} />} label="Leaderboard" />
-            <NavItem href="/models" icon={<Layers size={18} />} label="Models" />
-          </div>
-
-          {/* Thread List Placeholder / Auth Gate */}
-          <div className="pt-6">
-            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-2 mb-3">Your Threads</h4>
-            
-            {userId ? (
-              <div className="space-y-4">
-                <div>
-                  <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2 mt-4">Today</h5>
-                  <div className="space-y-0.5">
-                    <ThreadItem href="/t/placeholder-1" label="Claude vs Nemotron" />
-                    <ThreadItem href="/t/placeholder-2" label="React useActionState" />
-                  </div>
-                </div>
-                <div>
-                  <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2 mt-4">Previous 7 Days</h5>
-                  <div className="space-y-0.5">
-                    <ThreadItem href="/t/placeholder-3" label="Fixing PostgreSQL connection" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="px-2">
-                <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                  Sign in to keep your threads and vote on answers.
-                </p>
-                <SignInButton mode="modal">
-                  <button className="text-sm font-medium border border-border px-4 py-1.5 rounded hover:bg-secondary/50 transition-all-150">
-                    Sign in
-                  </button>
-                </SignInButton>
-              </div>
-            )}
-          </div>
+        {/* Main Nav (Fixed) */}
+        <nav className="px-4 py-2 space-y-0.5 shrink-0">
+          <NavItem href="/" icon={<Menu size={18} />} label="Arena" active />
+          <NavItem href="/leaderboard" icon={<Trophy size={18} />} label="Leaderboard" />
+          <NavItem href="/models" icon={<Layers size={18} />} label="Models" />
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border flex items-center justify-between">
+        {/* Thread List (Scrollable) */}
+        <div className="pt-6 px-4 flex-1 overflow-y-auto min-h-0 flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-2 mb-3 shrink-0">Your Threads</h4>
+          
+          {userId ? (
+            <div className="space-y-4">
+              {threadGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-2 leading-relaxed shrink-0">
+                  No threads yet. Start a conversation in the Arena!
+                </p>
+              ) : (
+                threadGroups.map((group) => (
+                  <div key={group.label}>
+                    <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-2 mt-4">
+                      {group.label}
+                    </h5>
+                    <div className="space-y-0.5">
+                      {group.threads.map((thread: any) => (
+                        <ThreadItem
+                          key={thread.id}
+                          href={`/t/${thread.id}`}
+                          label={thread.title}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="px-2 shrink-0">
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                Sign in to keep your threads and vote on answers.
+              </p>
+              <SignInButton mode="modal">
+                <button className="text-sm font-medium border border-border px-4 py-1.5 rounded hover:bg-secondary/50 transition-all-150">
+                  Sign in
+                </button>
+              </SignInButton>
+            </div>
+          )}
+        </div>
+
+        {/* Footer (Fixed) */}
+        <div className="p-4 border-t border-border flex items-center justify-between shrink-0 bg-background">
           <div className="flex items-center gap-2">
             {userId ? (
               <UserButton appearance={{ elements: { userButtonBox: "h-8 w-8" } }} />
@@ -77,18 +94,20 @@ export default async function ShellLayout({ children }: { children: ReactNode })
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
-        <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-6 sticky top-0 z-10">
-          <div className="text-sm font-medium text-muted-foreground">
-            Arena
-          </div>
-        </header>
+      <div className="flex-1 p-2 md:p-4 flex flex-col min-w-0 h-full">
+        <div className="flex-1 bg-background border border-border shadow-sm rounded-xl flex flex-col overflow-hidden min-h-0 relative">
+          {/* Top Bar */}
+          <header className="h-14 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-6 shrink-0 z-10 absolute top-0 left-0 right-0">
+            <div className="text-sm font-medium text-muted-foreground">
+              Arena
+            </div>
+          </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto mt-14 h-full relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

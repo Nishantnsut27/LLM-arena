@@ -82,7 +82,7 @@ export const streamModelAnswer = async (params: {
       } else if (params.onMetricsUpdate && ttft !== null) {
         params.onMetricsUpdate({
           timeToFirstToken: ttft,
-          tokensPerSecond: tps ? parseFloat(tps.toFixed(2)) : null,
+          tokensPerSecond: tps ? parseFloat(tps.toFixed(1)) : null,
           totalTokens: approxTokens
         });
       }
