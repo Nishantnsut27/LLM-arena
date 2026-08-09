@@ -1,43 +1,139 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm beige for light mode */
-  --background: #f8f5f2;
-  --foreground: #2b241e;
-  /* Rust accent */
-  --accent: #c84b31;
-  --accent-foreground: #ffffff;
-  
-  --success: #22c55e;
-  --error: #ef4444;
+  /* OKLCH Light Mode (Warm Paper) */
+  --background: oklch(0.96 0.014 42);
+  --foreground: oklch(0.25 0.014 42);
+
+  --card: oklch(0.98 0.014 42);
+  --card-foreground: oklch(0.25 0.014 42);
+
+  --popover: oklch(0.98 0.014 42);
+  --popover-foreground: oklch(0.25 0.014 42);
+
+  /* Primary: Rust */
+  --primary: oklch(0.55 0.16 42);
+  --primary-foreground: oklch(0.98 0.014 42);
+
+  --secondary: oklch(0.92 0.014 42);
+  --secondary-foreground: oklch(0.35 0.014 42);
+
+  --muted: oklch(0.92 0.014 42);
+  --muted-foreground: oklch(0.50 0.014 42);
+
+  --accent: oklch(0.92 0.014 42);
+  --accent-foreground: oklch(0.25 0.014 42);
+
+  /* Destructive: Error Red (Neighbor Hue 22) */
+  --destructive: oklch(0.55 0.16 22);
+  --destructive-foreground: oklch(0.98 0.014 42);
+
+  --border: oklch(0.90 0.014 42);
+  --input: oklch(0.90 0.014 42);
+  --ring: oklch(0.55 0.16 42);
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  /* OKLCH Dark Mode (Coffee) */
+  --background: oklch(0.20 0.014 42);
+  --foreground: oklch(0.96 0.014 42);
+
+  --card: oklch(0.25 0.014 42);
+  --card-foreground: oklch(0.96 0.014 42);
+
+  --popover: oklch(0.25 0.014 42);
+  --popover-foreground: oklch(0.96 0.014 42);
+
+  /* Primary: Brighter Rust */
+  --primary: oklch(0.65 0.16 42);
+  --primary-foreground: oklch(0.20 0.014 42);
+
+  --secondary: oklch(0.30 0.014 42);
+  --secondary-foreground: oklch(0.96 0.014 42);
+
+  --muted: oklch(0.30 0.014 42);
+  --muted-foreground: oklch(0.70 0.014 42);
+
+  --accent: oklch(0.30 0.014 42);
+  --accent-foreground: oklch(0.96 0.014 42);
+
+  /* Destructive: Error Red (Neighbor Hue 22) */
+  --destructive: oklch(0.60 0.16 22);
+  --destructive-foreground: oklch(0.20 0.014 42);
+
+  --border: oklch(0.35 0.014 42);
+  --input: oklch(0.35 0.014 42);
+  --ring: oklch(0.65 0.16 42);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-success: var(--success);
-  --color-error: var(--error);
-  
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Coffee / dark brown for dark mode */
-    --background: #1e1915;
-    --foreground: #f1ebe1;
-    /* Brighter rust for dark mode contrast */
-    --accent: #d95c41;
+/* Base element styles */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Global Transitions */
+@layer utilities {
+  .transition-all-150 {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
