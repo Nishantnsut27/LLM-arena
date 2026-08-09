@@ -95,6 +95,19 @@ export async function POST(request: Request) {
     );
   }
 
+  const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+  const turn = await prisma.turn.findUnique({
+    where: { id: body.turnId },
+    include: { thread: true }
+  });
+
+  if (!turn || turn.thread.userId !== dbUser?.id) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized access to thread." }),
+      { status: 403, headers: { "content-type": "application/json" } }
+    );
+  }
+
   const latestMessage = body.messages[body.messages.length - 1] as any;
   const promptText = typeof latestMessage?.content === "string" ? latestMessage.content : "";
 

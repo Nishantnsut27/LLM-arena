@@ -32,7 +32,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
   const turns: TurnData[] = thread.turns.map(turn => ({
     id: turn.id,
     prompt: turn.prompt,
-    vote: turn.vote ? { winnerModelId: turn.vote.modelResponseId } : null,
+    vote: turn.vote ? { winnerModelId: turn.vote.winnerModelId } : null,
     responses: turn.responses.map(res => ({
       id: res.id,
       modelId: res.modelId,
