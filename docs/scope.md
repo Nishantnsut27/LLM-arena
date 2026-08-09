@@ -80,8 +80,16 @@ A coffee or dark brown background, warm, not neutral gray or true black. One acc
 
 An "Add model" popover pulling OpenRouter's live free-tier list, sorted by context window, capped at three models, defaulting to all three selected, with removable chips next to the prompt box. Also render that same catalog as a simple `/models` page, name, context window, and pricing for each one, so anyone can browse the full list without opening the picker.
 
-- [ ] Decide the approach
+- [x] Decide the approach
 - [ ] Build it
+
+**Spec & Decisions (Locked)**
+- **Catalog Fetch**: Centralized in `lib/infrastructure/model-catalog.ts` (shared by both features). Fetches public OpenRouter endpoint, no key needed. Zod-parsed per row (bad rows are dropped without failing the list). Cached for one hour.
+- **Old Data**: Delete the invented `placeholder-catalog.ts`. The real catalog has 337 models (14 free), top context 1M (Nemotron 3 Ultra), with prices literally "0".
+- **UI Split**: Picker UI lives in `features/arena/` (it's a composer control). The browse page stays in `features/models/`. They share data, not markup.
+- **Default Trio**: Highest-context model per distinct provider. Today: Nemotron 3 Ultra (NVIDIA, 1M), Ling-3.0-flash (inclusionAI, 262K), Poolside Laguna S 2.1 (262K). Never three models from the same vendor.
+- **Picker Behavior**: No list filtering. Cap 3 / Floor 1. Disabled trigger explains itself. Uses shadcn popover. Context formats as `1M` or `262K` (not `/1024`).
+- **Security Check**: Folded into this feature, `/api/chat` must validate that the requested `modelId` is actually free, preventing users from exploiting our key for paid models.
 
 ### 6. Send a prompt, parallel streams, and voting
 
