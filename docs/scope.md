@@ -84,12 +84,12 @@ An "Add model" popover pulling OpenRouter's live free-tier list, sorted by conte
 - [ ] Build it
 
 **Spec & Decisions (Locked)**
-- **Catalog Fetch**: Centralized in `lib/infrastructure/model-catalog.ts` (shared by both features). Fetches public OpenRouter endpoint, no key needed. Zod-parsed per row (bad rows are dropped without failing the list). Cached for one hour.
-- **Old Data**: Delete the invented `placeholder-catalog.ts`. The real catalog has 337 models (14 free), top context 1M (Nemotron 3 Ultra), with prices literally "0".
-- **UI Split**: Picker UI lives in `features/arena/` (it's a composer control). The browse page stays in `features/models/`. They share data, not markup.
-- **Default Trio**: Highest-context model per distinct provider. Today: Nemotron 3 Ultra (NVIDIA, 1M), Ling-3.0-flash (inclusionAI, 262K), Poolside Laguna S 2.1 (262K). Never three models from the same vendor.
-- **Picker Behavior**: No list filtering. Cap 3 / Floor 1. Disabled trigger explains itself. Uses shadcn popover. Context formats as `1M` or `262K` (not `/1024`).
-- **Security Check**: Folded into this feature, `/api/chat` must validate that the requested `modelId` is actually free, preventing users from exploiting our key for paid models.
+- Measured the real catalog first. 337 models, 14 free, top context is 1M (Nemotron 3 Ultra), every price literally "0". Every model name in `placeholder-catalog.ts` is invented — that file gets deleted, not corrected.
+- Fetch lives in `lib/infrastructure/model-catalog.ts`. Two features need it, so it can't live in either one. Public endpoint, no key, zod-parsed per row (a bad row drops, it doesn't empty the list), cached at one hour.
+- Picker UI ships in `features/arena/`, the browse page stays in `features/models/`. The popover is a composer control; they share data, not markup.
+- Default trio = highest-context model per distinct provider (your call). Today: Nemotron 3 Ultra, Ling-3.0-flash, Poolside Laguna S 2.1.
+- No filtering of the list, cap three / floor one, disabled trigger explains itself, shadcn popover, context formats as `1M` / `262K` not the placeholder's `/1024`.
+- One extra thing folded in: `/api/chat` currently accepts any `modelId` string, so a signed-in user could name a paid model against our key. This feature is what makes a check possible, so the check ships here.
 
 ### 6. Send a prompt, parallel streams, and voting
 

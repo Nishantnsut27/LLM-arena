@@ -10,6 +10,7 @@ import { requireEnv } from "@/lib/env";
 import { aj } from "@/lib/arcjet";
 import { slidingWindow, detectPromptInjection } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
+import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 
 const routeAj = aj.withRule(
   slidingWindow({
@@ -79,6 +80,17 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({ error: "A message is required before sending, please try again." }),
       { status: 400, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  // Security validation: verify model is actually free and known
+  const freeModels = await getFreeModels();
+  const isApproved = freeModels.some((m) => m.id === body.model);
+  
+  if (!isApproved) {
+    return new Response(
+      JSON.stringify({ error: "Access denied. Only approved free-tier models are permitted." }),
+      { status: 403, headers: { "content-type": "application/json" } },
     );
   }
 

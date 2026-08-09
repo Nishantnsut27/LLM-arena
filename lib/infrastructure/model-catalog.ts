@@ -78,3 +78,28 @@ export async function getFreeModels(): Promise<ModelCatalogItem[]> {
     return [];
   }
 }
+
+export function getDefaultTrio(models: ModelCatalogItem[]): ModelCatalogItem[] {
+  const trio: ModelCatalogItem[] = [];
+  const seenProviders = new Set<string>();
+
+  for (const model of models) {
+    if (trio.length >= 3) break;
+    if (!seenProviders.has(model.provider)) {
+      trio.push(model);
+      seenProviders.add(model.provider);
+    }
+  }
+
+  // If we couldn't find 3 distinct providers, just fill the rest from what's left
+  if (trio.length < 3) {
+    for (const model of models) {
+      if (trio.length >= 3) break;
+      if (!trio.find((t) => t.id === model.id)) {
+        trio.push(model);
+      }
+    }
+  }
+
+  return trio;
+}
