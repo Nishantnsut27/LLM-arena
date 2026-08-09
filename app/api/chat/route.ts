@@ -1,15 +1,16 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
-  convertToModelMessages,
-  createUIMessageStreamResponse,
   streamText,
   toUIMessageStream,
+  createUIMessageStreamResponse,
   type UIMessage,
 } from "ai";
 import { requireEnv } from "@/lib/env";
 import { aj } from "@/lib/arcjet";
 import { slidingWindow, detectPromptInjection } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
+import { getFreeModels } from "@/lib/infrastructure/model-catalog";
+import { prisma } from "@/lib/db";
 
 const routeAj = aj.withRule(
   slidingWindow({
@@ -32,7 +33,8 @@ const openrouter = createOpenRouter({
 });
 
 type ChatRequest = {
-  model: string;
+  modelId: string;
+  turnId: string;
   messages: Array<Omit<UIMessage, "id">>;
 };
 
@@ -43,7 +45,7 @@ type ModelMetadata = {
     totalTokens: number;
   };
   timingMs: number;
-  firstTokenMs: number | null;
+  timeToFirstTokenMs: number | null;
   tokensPerSecond: number | null;
 };
 
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (typeof body.model !== "string" || body.model.length === 0) {
+  if (typeof body.modelId !== "string" || body.modelId.length === 0) {
     return new Response(
       JSON.stringify({ error: "A model must be selected before sending, please try again." }),
       { status: 400, headers: { "content-type": "application/json" } },
@@ -79,6 +81,30 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({ error: "A message is required before sending, please try again." }),
       { status: 400, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  // Security validation: verify model is actually free and known
+  const freeModels = await getFreeModels();
+  const isApproved = freeModels.some((m) => m.id === body.modelId);
+  
+  if (!isApproved) {
+    return new Response(
+      JSON.stringify({ error: "Access denied. Only approved free-tier models are permitted." }),
+      { status: 403, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+  const turn = await prisma.turn.findUnique({
+    where: { id: body.turnId },
+    include: { thread: true }
+  });
+
+  if (!turn || turn.thread.userId !== dbUser?.id) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized access to thread." }),
+      { status: 403, headers: { "content-type": "application/json" } }
     );
   }
 
@@ -112,19 +138,48 @@ export async function POST(request: Request) {
   let firstTokenAt: number | null = null;
 
   try {
-    const result = streamText({
-      model: openrouter.chat(body.model),
-      messages: await convertToModelMessages(body.messages),
+    const result = await streamText({
+      model: openrouter.chat(body.modelId),
+      messages: body.messages.map((message) => ({
+        role: message.role as "user" | "assistant" | "system",
+        content: message.content,
+      })),
+      onChunk: ({ chunk }) => {
+        if (chunk.type === "text-delta" && firstTokenAt === null) {
+          firstTokenAt = performance.now();
+        }
+      },
+      onFinish: async ({ text, usage }) => {
+        const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
+        const ttft = firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt);
+        const tps = streamMs !== null && streamMs > 0 ? (usage.completionTokens / (streamMs / 1000)) : null;
+
+        await prisma.modelResponse.update({
+          where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+          data: {
+            status: "COMPLETE",
+            text,
+            timeToFirstToken: ttft,
+            tokensPerSecond: tps,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            completedAt: new Date(),
+          }
+        }).catch(console.error);
+      },
     });
 
     const stream = toUIMessageStream({
       stream: result.stream,
-      onError: () => "That model couldn't finish, please try again.",
+      onError: async () => {
+        await prisma.modelResponse.update({
+          where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+          data: { status: "FAILED", completedAt: new Date() }
+        }).catch(console.error);
+        return "That model couldn't finish, please try again.";
+      },
       messageMetadata: ({ part }) => {
-        if (part.type === "text-delta" && firstTokenAt === null) {
-          firstTokenAt = performance.now();
-        }
-
         if (part.type === "finish") {
           const timingMs = performance.now() - startedAt;
           const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = part.totalUsage;
@@ -133,20 +188,24 @@ export async function POST(request: Request) {
           const metadata: ModelMetadata = {
             usage: { inputTokens, outputTokens, totalTokens },
             timingMs,
-            firstTokenMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
-            tokensPerSecond:
-              streamMs !== null && streamMs > 0 ? Math.round((outputTokens / streamMs) * 1000) : null,
+            timeToFirstTokenMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
+            tokensPerSecond: streamMs !== null && streamMs > 0 ? (outputTokens / (streamMs / 1000)) : null,
           };
 
           return metadata;
         }
-
         return undefined;
       },
     });
 
     return createUIMessageStreamResponse({ stream });
-  } catch {
+  } catch (err) {
+    console.error("Stream error in /api/chat:", err);
+    await prisma.modelResponse.update({
+      where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+      data: { status: "FAILED", completedAt: new Date() }
+    }).catch(console.error);
+    
     return new Response(
       JSON.stringify({ error: "That model couldn't answer right now. Please try again later." }),
       { status: 500, headers: { "content-type": "application/json" } },
