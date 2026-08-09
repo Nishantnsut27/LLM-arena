@@ -28,30 +28,43 @@ model Thread {
   updatedAt DateTime  @updatedAt
   userId    String?
   user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  messages  Message[]
-  votes     Vote[]
+  turns     Turn[]
 }
 
-model Message {
-  id               String   @id @default(cuid())
-  threadId         String
-  thread           Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  role             String   // "user" or "assistant"
-  content          String
-  model            String?  // null for user messages, specifies the AI model used for assistant messages
-  timeToFirstToken Int?     // in ms
-  tokensPerSecond  Float?
-  totalTokens      Int?
-  createdAt        DateTime @default(now())
+model Turn {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  prompt    String
+  createdAt DateTime @default(now())
+
+  responses ModelResponse[]
+  vote      Vote?
+}
+
+model ModelResponse {
+  id                String   @id @default(cuid())
+  turnId            String
+  turn              Turn     @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  modelId           String
+  modelNameSnapshot String
+  status            String   // "streaming" | "complete" | "failed"
+  text              String?
+  timeToFirstToken  Int?
+  tokensPerSecond   Float?
+  inputTokens       Int?
+  outputTokens      Int?
+  totalTokens       Int?
+  costUsd           Float?
+  createdAt         DateTime @default(now())
 }
 
 model Vote {
-  id          String   @id @default(cuid())
-  threadId    String
-  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  promptText  String   // the user prompt that led to this vote
-  winnerModel String   // the model that won the turn
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  turnId        String   @unique
+  turn          Turn     @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  winnerModelId String
+  createdAt     DateTime @default(now())
 }
