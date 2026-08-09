@@ -16,12 +16,13 @@ export default async function ArenaPage() {
       </div>
 
       {/* Input box pinned to bottom */}
-      <div className="p-4 pb-8 max-w-4xl mx-auto w-full">
-        <ArenaComposer catalog={catalog} />
-        
-        <p className="text-center text-xs text-muted-foreground mt-3">
-          Up to three models at a time. Every one of them is free.
-        </p>
+      <div className="bg-background/85 sticky bottom-0 px-4 pt-2 pb-4 backdrop-blur-sm sm:px-6 w-full">
+        <div className="surface mx-auto max-w-4xl p-3">
+          <ArenaComposer catalog={catalog} />
+          <p className="text-center text-xs text-muted-foreground mt-3">
+            Up to three models at a time. Every one of them is free.
+          </p>
+        </div>
       </div>
     </div>
   );

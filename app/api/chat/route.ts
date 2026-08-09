@@ -1,9 +1,8 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
-  convertToModelMessages,
-  createUIMessageStreamResponse,
   streamText,
   toUIMessageStream,
+  createUIMessageStreamResponse,
   type UIMessage,
 } from "ai";
 import { requireEnv } from "@/lib/env";
@@ -33,7 +32,8 @@ const openrouter = createOpenRouter({
 });
 
 type ChatRequest = {
-  model: string;
+  modelId: string;
+  turnId: string;
   messages: Array<Omit<UIMessage, "id">>;
 };
 
@@ -44,7 +44,7 @@ type ModelMetadata = {
     totalTokens: number;
   };
   timingMs: number;
-  firstTokenMs: number | null;
+  timeToFirstTokenMs: number | null;
   tokensPerSecond: number | null;
 };
 
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (typeof body.model !== "string" || body.model.length === 0) {
+  if (typeof body.modelId !== "string" || body.modelId.length === 0) {
     return new Response(
       JSON.stringify({ error: "A model must be selected before sending, please try again." }),
       { status: 400, headers: { "content-type": "application/json" } },
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
 
   // Security validation: verify model is actually free and known
   const freeModels = await getFreeModels();
-  const isApproved = freeModels.some((m) => m.id === body.model);
+  const isApproved = freeModels.some((m) => m.id === body.modelId);
   
   if (!isApproved) {
     return new Response(
@@ -124,19 +124,23 @@ export async function POST(request: Request) {
   let firstTokenAt: number | null = null;
 
   try {
-    const result = streamText({
-      model: openrouter.chat(body.model),
-      messages: await convertToModelMessages(body.messages),
+    const result = await streamText({
+      model: openrouter.chat(body.modelId),
+      messages: body.messages.map((message) => ({
+        role: message.role as "user" | "assistant" | "system",
+        content: message.content,
+      })),
+      onChunk: ({ chunk }) => {
+        if (chunk.type === "text-delta" && firstTokenAt === null) {
+          firstTokenAt = performance.now();
+        }
+      },
     });
 
     const stream = toUIMessageStream({
       stream: result.stream,
       onError: () => "That model couldn't finish, please try again.",
       messageMetadata: ({ part }) => {
-        if (part.type === "text-delta" && firstTokenAt === null) {
-          firstTokenAt = performance.now();
-        }
-
         if (part.type === "finish") {
           const timingMs = performance.now() - startedAt;
           const { inputTokens = 0, outputTokens = 0, totalTokens = 0 } = part.totalUsage;
@@ -145,7 +149,7 @@ export async function POST(request: Request) {
           const metadata: ModelMetadata = {
             usage: { inputTokens, outputTokens, totalTokens },
             timingMs,
-            firstTokenMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+            timeToFirstTokenMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
             tokensPerSecond:
               streamMs !== null && streamMs > 0 ? Math.round((outputTokens / streamMs) * 1000) : null,
           };
@@ -158,7 +162,8 @@ export async function POST(request: Request) {
     });
 
     return createUIMessageStreamResponse({ stream });
-  } catch {
+  } catch (err) {
+    console.error("Stream error in /api/chat:", err);
     return new Response(
       JSON.stringify({ error: "That model couldn't answer right now. Please try again later." }),
       { status: 500, headers: { "content-type": "application/json" } },
