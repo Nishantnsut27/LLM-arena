@@ -11,7 +11,7 @@ interface StreamingModelResponseCardProps {
   modelName: string;
   initialMessages: UIMessage[];
   prompt: string;
-  onFinish?: () => void;
+  onFinish?: (status: "complete" | "failed") => void;
   canVote?: boolean;
   isWinner?: boolean;
   onVote?: () => void;
@@ -58,7 +58,7 @@ export function StreamingModelResponseCard({
             setMetrics(finalMetrics);
           }
           inFlight.current = false;
-          onFinish?.();
+          onFinish?.(outcome === "COMPLETE" ? "complete" : "failed");
         }
       });
     }

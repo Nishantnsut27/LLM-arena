@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/db";
 import type { ModelCatalogItem } from "@/lib/infrastructure/model-catalog";
+import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 import { revalidatePath } from "next/cache";
 
 export async function createThreadAction(prompt: string, models: ModelCatalogItem[]) {

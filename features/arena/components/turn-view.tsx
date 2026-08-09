@@ -80,8 +80,10 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
                 canVote={canVote && !hasVoted}
                 isWinner={isWinner}
                 onVote={() => handleVote(response.modelId)}
-                onFinish={() => {
-                  setCompletedStreams(prev => new Set([...Array.from(prev), response.modelId]));
+                onFinish={(status) => {
+                  if (status === "complete") {
+                    setCompletedStreams(prev => new Set([...Array.from(prev), response.modelId]));
+                  }
                 }}
               />
             );
