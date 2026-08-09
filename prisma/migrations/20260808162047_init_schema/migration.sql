@@ -20,27 +20,40 @@ CREATE TABLE "Thread" (
 );
 
 -- CreateTable
-CREATE TABLE "Message" (
+CREATE TABLE "Turn" (
     "id" TEXT NOT NULL,
     "threadId" TEXT NOT NULL,
-    "role" TEXT NOT NULL,
-    "content" TEXT NOT NULL,
-    "model" TEXT,
-    "timeToFirstToken" INTEGER,
-    "tokensPerSecond" DOUBLE PRECISION,
-    "totalTokens" INTEGER,
+    "prompt" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Turn_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ModelResponse" (
+    "id" TEXT NOT NULL,
+    "turnId" TEXT NOT NULL,
+    "modelId" TEXT NOT NULL,
+    "modelNameSnapshot" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "text" TEXT,
+    "timeToFirstToken" INTEGER,
+    "tokensPerSecond" DOUBLE PRECISION,
+    "inputTokens" INTEGER,
+    "outputTokens" INTEGER,
+    "totalTokens" INTEGER,
+    "costUsd" DOUBLE PRECISION,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ModelResponse_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Vote" (
     "id" TEXT NOT NULL,
-    "threadId" TEXT NOT NULL,
+    "turnId" TEXT NOT NULL,
     "userId" TEXT,
-    "promptText" TEXT NOT NULL,
-    "winnerModel" TEXT NOT NULL,
+    "winnerModelId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Vote_pkey" PRIMARY KEY ("id")
@@ -49,14 +62,20 @@ CREATE TABLE "Vote" (
 -- CreateIndex
 CREATE UNIQUE INDEX "User_clerkId_key" ON "User"("clerkId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "Vote_turnId_key" ON "Vote"("turnId");
+
 -- AddForeignKey
 ALTER TABLE "Thread" ADD CONSTRAINT "Thread_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Message" ADD CONSTRAINT "Message_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "Thread"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Turn" ADD CONSTRAINT "Turn_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "Thread"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Vote" ADD CONSTRAINT "Vote_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "Thread"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ModelResponse" ADD CONSTRAINT "ModelResponse_turnId_fkey" FOREIGN KEY ("turnId") REFERENCES "Turn"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Vote" ADD CONSTRAINT "Vote_turnId_fkey" FOREIGN KEY ("turnId") REFERENCES "Turn"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Vote" ADD CONSTRAINT "Vote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
