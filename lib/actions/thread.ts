@@ -49,6 +49,25 @@ export async function createThreadAction(prompt: string, models: ModelCatalogIte
 }
 
 export async function createTurnAction(threadId: string, prompt: string, modelIds: string[]) {
+  const { userId } = await auth();
+
+  let dbUserId = null;
+  if (userId) {
+     const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+     if (dbUser) {
+        dbUserId = dbUser.id;
+     }
+  }
+
+  const thread = await prisma.thread.findUnique({ where: { id: threadId } });
+  if (!thread) {
+    throw new Error("Thread not found");
+  }
+
+  if (thread.userId && thread.userId !== dbUserId) {
+    throw new Error("Unauthorized to add turns to this thread");
+  }
+
   const models = await getFreeModels();
   const selectedModels = models.filter(m => modelIds.includes(m.id));
 

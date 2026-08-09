@@ -10,6 +10,7 @@ import { aj } from "@/lib/arcjet";
 import { slidingWindow, detectPromptInjection } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
+import { prisma } from "@/lib/db";
 
 const routeAj = aj.withRule(
   slidingWindow({
@@ -135,11 +136,36 @@ export async function POST(request: Request) {
           firstTokenAt = performance.now();
         }
       },
+      onFinish: async ({ text, usage }) => {
+        const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
+        const ttft = firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt);
+        const tps = streamMs !== null && streamMs > 0 ? (usage.completionTokens / (streamMs / 1000)) : null;
+
+        await prisma.modelResponse.update({
+          where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+          data: {
+            status: "COMPLETE",
+            text,
+            timeToFirstToken: ttft,
+            tokensPerSecond: tps,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            completedAt: new Date(),
+          }
+        }).catch(console.error);
+      },
     });
 
     const stream = toUIMessageStream({
       stream: result.stream,
-      onError: () => "That model couldn't finish, please try again.",
+      onError: async () => {
+        await prisma.modelResponse.update({
+          where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+          data: { status: "FAILED", completedAt: new Date() }
+        }).catch(console.error);
+        return "That model couldn't finish, please try again.";
+      },
       messageMetadata: ({ part }) => {
         if (part.type === "finish") {
           const timingMs = performance.now() - startedAt;
@@ -149,14 +175,12 @@ export async function POST(request: Request) {
           const metadata: ModelMetadata = {
             usage: { inputTokens, outputTokens, totalTokens },
             timingMs,
-            timeToFirstTokenMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
-            tokensPerSecond:
-              streamMs !== null && streamMs > 0 ? Math.round((outputTokens / streamMs) * 1000) : null,
+            timeToFirstTokenMs: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
+            tokensPerSecond: streamMs !== null && streamMs > 0 ? (outputTokens / (streamMs / 1000)) : null,
           };
 
           return metadata;
         }
-
         return undefined;
       },
     });
@@ -164,6 +188,11 @@ export async function POST(request: Request) {
     return createUIMessageStreamResponse({ stream });
   } catch (err) {
     console.error("Stream error in /api/chat:", err);
+    await prisma.modelResponse.update({
+      where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
+      data: { status: "FAILED", completedAt: new Date() }
+    }).catch(console.error);
+    
     return new Response(
       JSON.stringify({ error: "That model couldn't answer right now. Please try again later." }),
       { status: 500, headers: { "content-type": "application/json" } },
