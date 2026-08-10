@@ -63,8 +63,11 @@ export function ArenaComposer({ catalog, threadId, defaultSelection }: ArenaComp
     try {
       const selectedModelIds = selectedModels.map((m) => m.id);
       if (threadId) {
-        await createTurnAction(threadId, prompt, selectedModelIds);
+        const result = await createTurnAction(threadId, prompt, selectedModelIds);
         setPrompt(""); // Clear input on success
+        if (result.didFork) {
+          router.push(`/t/${result.threadId}`);
+        }
       } else {
         const { threadId: newThreadId } = await createThreadAction(prompt, selectedModels);
         router.push(`/t/${newThreadId}`);

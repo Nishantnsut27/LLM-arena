@@ -64,8 +64,61 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
     throw new Error("Thread not found");
   }
 
+  if (!dbUserId) {
+    throw new Error("Unauthorized");
+  }
+
+  // We will either use the existing thread or create a new one (forking)
+  let targetThreadId = threadId;
+  let didFork = false;
+
   if (thread.userId && thread.userId !== dbUserId) {
-    throw new Error("Unauthorized to add turns to this thread");
+    // Fork the thread
+    didFork = true;
+    
+    // Fetch all existing turns and their responses to copy
+    const fullThread = await prisma.thread.findUnique({
+      where: { id: threadId },
+      include: {
+        turns: {
+          include: {
+            responses: true
+          }
+        }
+      }
+    });
+
+    if (!fullThread) throw new Error("Thread disappeared");
+
+    const newThread = await prisma.thread.create({
+      data: {
+        userId: dbUserId,
+        title: thread.title,
+        turns: {
+          create: fullThread.turns.map(t => ({
+            prompt: t.prompt,
+            createdAt: t.createdAt,
+            responses: {
+              create: t.responses.map(r => ({
+                modelId: r.modelId,
+                modelNameSnapshot: r.modelNameSnapshot,
+                status: r.status === "streaming" ? "failed" : r.status,
+                text: r.text,
+                timeToFirstToken: r.timeToFirstToken,
+                tokensPerSecond: r.tokensPerSecond,
+                inputTokens: r.inputTokens,
+                outputTokens: r.outputTokens,
+                totalTokens: r.totalTokens,
+                costUsd: r.costUsd,
+                createdAt: r.createdAt
+              }))
+            }
+          }))
+        }
+      }
+    });
+    
+    targetThreadId = newThread.id;
   }
 
   const models = await getFreeModels();
@@ -77,7 +130,7 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
 
   const turn = await prisma.turn.create({
     data: {
-      threadId,
+      threadId: targetThreadId,
       prompt,
       responses: {
         create: selectedModels.map((m) => ({
@@ -92,13 +145,16 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
 
   // Bump the thread's updatedAt timestamp for recency grouping
   await prisma.thread.update({
-    where: { id: threadId },
+    where: { id: targetThreadId },
     data: { updatedAt: new Date() }
   });
 
-  revalidatePath(`/t/${threadId}`);
+  revalidatePath(`/t/${targetThreadId}`);
+  if (didFork) {
+    revalidatePath(`/t/${threadId}`);
+  }
   // revalidate layout to update the sidebar
   revalidatePath(`/`, "layout");
 
-  return { turnId: turn.id };
+  return { turnId: turn.id, threadId: targetThreadId, didFork };
 }
