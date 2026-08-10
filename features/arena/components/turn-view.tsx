@@ -5,6 +5,7 @@ import { type UIMessage } from "ai";
 import { ModelResponseCard } from "./model-response-card";
 import { StreamingModelResponseCard } from "./streaming-model-response-card";
 import { castVoteAction } from "@/lib/actions/vote";
+import { useClerk } from "@clerk/nextjs";
 
 export interface TurnResponse {
   id: string;
@@ -22,21 +23,38 @@ export interface TurnData {
   prompt: string;
   responses: TurnResponse[];
   vote?: { winnerModelId: string } | null;
+  createdAt: string;
 }
 
 interface TurnViewProps {
   turn: TurnData;
   historicalTurns: TurnData[];
+  /** True only when the current viewer owns this thread. Controls whether streaming fires. */
+  isOwner?: boolean;
+  /** Whether the current viewer is signed in. Controls vote button behavior. */
+  isSignedIn?: boolean;
 }
 
 import { buildModelMessages } from "../model-messages";
 
-export function TurnView({ turn, historicalTurns }: TurnViewProps) {
+export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = false }: TurnViewProps) {
+  const clerk = useClerk();
   const [completedStreams, setCompletedStreams] = useState<Set<string>>(new Set());
   const [hasVoted, setHasVoted] = useState(!!turn.vote);
   const [winnerId, setWinnerId] = useState<string | null>(turn.vote?.winnerModelId || null);
 
-  const isStreamingTurn = turn.responses.some(r => r.status === "streaming");
+  /**
+   * Non-owners never trigger streaming. This mirrors the demo's approach exactly:
+   * if (!isOwner) return in the streaming effect.
+   * A response stored as "streaming" in the DB is treated as "failed" for non-owners
+   * so they see the stored text (or a failed state) rather than re-triggering a stream.
+   */
+  const effectiveStatus = (response: TurnResponse) => {
+    if (!isOwner && response.status === "streaming") return "failed";
+    return response.status;
+  };
+
+  const isStreamingTurn = isOwner && turn.responses.some(r => r.status === "streaming");
 
   // A vote is allowed if:
   // 1. It hasn't been voted on yet
@@ -44,6 +62,11 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
   const canVote = !hasVoted && (!isStreamingTurn || completedStreams.size >= 2);
 
   const handleVote = async (modelId: string) => {
+    // Non-logged-in users → open sign in modal
+    if (!isSignedIn) {
+      clerk.openSignIn();
+      return;
+    }
     if (!canVote) return;
     setHasVoted(true);
     setWinnerId(modelId);
@@ -67,8 +90,10 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {turn.responses.map((response) => {
           const isWinner = winnerId === response.modelId;
+          const status = effectiveStatus(response);
 
-          if (response.status === "streaming") {
+          // Only trigger live streaming for the owner
+          if (isOwner && status === "streaming") {
             return (
               <StreamingModelResponseCard
                 key={response.id}
@@ -80,8 +105,8 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
                 canVote={canVote && !hasVoted}
                 isWinner={isWinner}
                 onVote={() => handleVote(response.modelId)}
-                onFinish={(status) => {
-                  if (status === "complete") {
+                onFinish={(s) => {
+                  if (s === "complete") {
                     setCompletedStreams(prev => new Set([...Array.from(prev), response.modelId]));
                   }
                 }}
@@ -89,18 +114,18 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
             );
           }
 
-          // Historical or completely failed
+          // For non-owners or completed/failed: show stored text from DB
           return (
             <ModelResponseCard
               key={response.id}
               modelId={response.modelId}
               modelName={response.modelNameSnapshot}
-              status={response.status as "complete" | "failed"}
+              status={status as "complete" | "failed"}
               text={response.text || undefined}
               timeToFirstToken={response.timeToFirstToken}
               tokensPerSecond={response.tokensPerSecond}
               totalTokens={response.totalTokens}
-              canVote={canVote && !hasVoted}
+              canVote={canVote}
               isWinner={isWinner}
               onVote={() => handleVote(response.modelId)}
             />
@@ -108,10 +133,12 @@ export function TurnView({ turn, historicalTurns }: TurnViewProps) {
         })}
       </div>
 
-      {/* Voting Hint */}
-      {!hasVoted && (
+      {/* Voting hint — only show when a vote is possible */}
+      {canVote && (
         <div className="text-center text-sm text-muted-foreground mt-2">
-          Two or more models answered, so this turn can be voted on. Picking one marks it the winner and leaves every answer on screen.
+          {isSignedIn
+            ? "Pick the best answer — your vote marks the winner."
+            : "Sign in to vote on this thread."}
         </div>
       )}
     </div>

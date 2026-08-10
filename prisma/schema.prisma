@@ -57,7 +57,6 @@ model ModelResponse {
   totalTokens       Int?
   costUsd           Float?
   createdAt         DateTime @default(now())
-  completedAt       DateTime?
 
   @@unique([turnId, modelId])
 }

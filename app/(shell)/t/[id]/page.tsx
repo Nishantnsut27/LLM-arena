@@ -5,6 +5,18 @@ import { TurnView, type TurnData } from "@/features/arena/components/turn-view";
 import { ArenaComposer } from "@/features/arena/components/arena-composer";
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 
+/**
+ * A saved thread, and the URL that feature 8 shares. Anyone can open this link
+ * and see the thread, signed in or not: `notFound()` is the only gate.
+ *
+ * `isOwner` controls two things:
+ * 1. Whether StreamingModelResponseCard fires (non-owners never trigger a stream,
+ *    they just see the stored text from the DB)
+ * 2. Whether the chat composer renders (only owner can continue the thread)
+ *
+ * Any signed-in user can vote on any thread — the vote button is shown to all
+ * signed-in users. Unsigned users see a "please login" prompt.
+ */
 export default async function ThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: threadId } = await params;
   const { userId: clerkId } = await auth();
@@ -25,13 +37,29 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
 
   if (!thread) notFound();
 
-  // If a user is signed in, we can optionally restrict composer access to only the thread owner.
-  // We'll just load the catalog so ArenaComposer has it (though it won't be used since models are locked).
   const catalog = await getFreeModels();
+
+  // Determine if the current viewer is the thread owner.
+  // Only the owner can continue the thread AND trigger live streaming.
+  // A non-owner always sees stored DB text (no stream re-triggered).
+  let isOwner = false;
+  if (clerkId) {
+    const dbUser = await prisma.user.findUnique({ where: { clerkId } });
+    if (dbUser && thread.userId === dbUser.id) {
+      isOwner = true;
+    } else if (!thread.userId) {
+      // Thread was created by an anonymous user — treat the current viewer as owner
+      isOwner = true;
+    }
+  } else if (!thread.userId) {
+    // Both thread and viewer are anonymous — allow streaming
+    isOwner = true;
+  }
 
   const turns: TurnData[] = thread.turns.map(turn => ({
     id: turn.id,
     prompt: turn.prompt,
+    createdAt: turn.createdAt.toISOString(),
     vote: turn.vote ? { winnerModelId: turn.vote.winnerModelId } : null,
     responses: turn.responses.map(res => ({
       id: res.id,
@@ -57,6 +85,8 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
             key={turn.id}
             turn={turn}
             historicalTurns={turns.slice(0, index)}
+            isOwner={isOwner}
+            isSignedIn={!!clerkId}
           />
         ))}
       </div>
@@ -64,7 +94,21 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
       {/* Floating sticky composer at bottom */}
       <div className="sticky bottom-0 px-4 pt-2 pb-4 sm:px-6 w-full max-w-4xl mx-auto z-10 bg-background/95 backdrop-blur-md">
         <div className="mx-auto w-full p-2">
-          <ArenaComposer catalog={catalog} threadId={thread.id} defaultSelection={defaultSelection} />
+          {isOwner && clerkId ? (
+            <ArenaComposer catalog={catalog} threadId={thread.id} defaultSelection={defaultSelection} />
+          ) : clerkId ? (
+            // Logged-in non-owner: can start a new thread from home but not continue this one
+            <div className="bg-muted text-center py-4 rounded-xl border border-border">
+              <p className="text-muted-foreground text-sm font-medium">
+                You are viewing someone else's thread. <a href="/" className="underline font-semibold text-foreground">Start your own →</a>
+              </p>
+            </div>
+          ) : (
+            // Not logged in: show login prompt
+            <div className="bg-muted text-center py-4 rounded-xl border border-border">
+              <p className="text-muted-foreground text-sm font-medium">Please sign in to vote and chat</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

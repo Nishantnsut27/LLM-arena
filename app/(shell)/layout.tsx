@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { LogIn, Trophy, Layers, MessageSquare, Menu } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { listThreadHistory } from "@/features/shell/thread-history";
+import { TopBar } from "@/components/top-bar";
 
 export default async function ShellLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
@@ -81,12 +82,8 @@ export default async function ShellLayout({ children }: { children: ReactNode })
         {/* Footer (Fixed) */}
         <div className="p-4 border-t border-border flex items-center justify-between shrink-0 bg-background">
           <div className="flex items-center gap-2">
-            {userId ? (
+            {userId && (
               <UserButton appearance={{ elements: { userButtonBox: "h-8 w-8" } }} />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center font-serif text-sm font-medium">
-                N
-              </div>
             )}
           </div>
           <ThemeToggle />
@@ -97,11 +94,7 @@ export default async function ShellLayout({ children }: { children: ReactNode })
       <div className="flex-1 p-2 md:p-4 flex flex-col min-w-0 h-full">
         <div className="flex-1 bg-background border border-border shadow-sm rounded-xl flex flex-col overflow-hidden min-h-0 relative">
           {/* Top Bar */}
-          <header className="h-14 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-6 shrink-0 z-10 absolute top-0 left-0 right-0">
-            <div className="text-sm font-medium text-muted-foreground">
-              Arena
-            </div>
-          </header>
+          <TopBar />
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto mt-14 h-full relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">

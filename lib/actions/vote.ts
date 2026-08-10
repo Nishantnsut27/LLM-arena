@@ -17,7 +17,6 @@ export async function castVoteAction(turnId: string, winnerModelId: string) {
     include: { thread: true, responses: true }
   });
   if (!turn) throw new Error("Turn not found");
-  if (turn.thread.userId !== dbUserId) throw new Error("Unauthorized to vote on this thread");
 
   const selectedResponse = turn.responses.find(r => r.modelId === winnerModelId);
   if (!selectedResponse) throw new Error("Invalid model selection");

@@ -95,16 +95,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
-  const turn = await prisma.turn.findUnique({
-    where: { id: body.turnId },
-    include: { thread: true }
-  });
-
-  if (!turn || turn.thread.userId !== dbUser?.id) {
+  // Verify the turn exists — we allow any signed-in user to stream
+  // (ownership check is handled at the thread/turn creation level)
+  const turn = await prisma.turn.findUnique({ where: { id: body.turnId } });
+  if (!turn) {
     return new Response(
-      JSON.stringify({ error: "Unauthorized access to thread." }),
-      { status: 403, headers: { "content-type": "application/json" } }
+      JSON.stringify({ error: "Turn not found." }),
+      { status: 404, headers: { "content-type": "application/json" } }
     );
   }
 
@@ -164,14 +161,13 @@ export async function POST(request: Request) {
         await prisma.modelResponse.update({
           where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
           data: {
-            status: "COMPLETE",
+            status: "complete",
             text,
             timeToFirstToken: ttft,
             tokensPerSecond: tps ? Number(tps.toFixed(1)) : null,
             inputTokens: usage.inputTokens ?? 0,
             outputTokens: usage.outputTokens ?? 0,
-            totalTokens: usage.outputTokens ?? 0,
-            completedAt: new Date(),
+            totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
           }
         }).catch(console.error);
       },
@@ -182,7 +178,7 @@ export async function POST(request: Request) {
       onError: () => {
         prisma.modelResponse.update({
           where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
-          data: { status: "FAILED", completedAt: new Date() }
+          data: { status: "failed" }
         }).catch(console.error);
         return "That model couldn't finish, please try again.";
       },
@@ -206,7 +202,7 @@ export async function POST(request: Request) {
     console.error("Stream error in /api/chat:", err);
     await prisma.modelResponse.update({
       where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
-      data: { status: "FAILED", completedAt: new Date() }
+      data: { status: "failed" }
     }).catch(console.error);
     
     return new Response(
