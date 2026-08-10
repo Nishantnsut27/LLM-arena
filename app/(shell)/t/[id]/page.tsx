@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db";
 import { TurnView, type TurnData } from "@/features/arena/components/turn-view";
 import { ArenaComposer } from "@/features/arena/components/arena-composer";
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
+import { aj } from "@/lib/arcjet";
+import { slidingWindow } from "@arcjet/next";
+import { headers } from "next/headers";
 
 /**
  * A saved thread, and the URL that feature 8 shares. Anyone can open this link
@@ -20,6 +23,35 @@ import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 export default async function ThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: threadId } = await params;
   const { userId: clerkId } = await auth();
+
+  // Create a synthetic Request to run Arcjet in a Server Component
+  const req = new Request(`https://llm-arena.com/t/${threadId}`, {
+    headers: await headers()
+  });
+
+  // Apply base rules (Shield, Bot Detection) + route-specific Rate Limiting (IP-based, generous)
+  const decision = await aj
+    .withRule(
+      slidingWindow({
+        mode: "LIVE",
+        interval: "60s",
+        max: 60, // Generous limit for public link viewing
+      })
+    )
+    .protect(req);
+
+  if (decision.isDenied()) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 text-center">
+        <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">
+          {decision.reason.isRateLimit() 
+            ? "You've requested this page too many times recently. Please wait a moment." 
+            : "Your request was blocked by our security policies."}
+        </p>
+      </div>
+    );
+  }
   
   // Find the thread
   const thread = await prisma.thread.findUnique({
