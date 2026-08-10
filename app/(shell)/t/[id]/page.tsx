@@ -94,15 +94,8 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
       {/* Floating sticky composer at bottom */}
       <div className="sticky bottom-0 px-4 pt-2 pb-4 sm:px-6 w-full max-w-4xl mx-auto z-10 bg-background/95 backdrop-blur-md">
         <div className="mx-auto w-full p-2">
-          {isOwner && clerkId ? (
+          {clerkId ? (
             <ArenaComposer catalog={catalog} threadId={thread.id} defaultSelection={defaultSelection} />
-          ) : clerkId ? (
-            // Logged-in non-owner: can start a new thread from home but not continue this one
-            <div className="bg-muted text-center py-4 rounded-xl border border-border">
-              <p className="text-muted-foreground text-sm font-medium">
-                You are viewing someone else's thread. <a href="/" className="underline font-semibold text-foreground">Start your own →</a>
-              </p>
-            </div>
           ) : (
             // Not logged in: show login prompt
             <div className="bg-muted text-center py-4 rounded-xl border border-border">
