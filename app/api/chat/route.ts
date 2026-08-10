@@ -95,13 +95,18 @@ export async function POST(request: Request) {
     );
   }
 
-  // Verify the turn exists — we allow any signed-in user to stream
-  // (ownership check is handled at the thread/turn creation level)
-  const turn = await prisma.turn.findUnique({ where: { id: body.turnId } });
-  if (!turn) {
+  const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+  
+  // Verify the turn exists and belongs to the authenticated user's thread
+  const turn = await prisma.turn.findUnique({ 
+    where: { id: body.turnId },
+    include: { thread: true }
+  });
+
+  if (!turn || (turn.thread.userId && turn.thread.userId !== dbUser?.id)) {
     return new Response(
-      JSON.stringify({ error: "Turn not found." }),
-      { status: 404, headers: { "content-type": "application/json" } }
+      JSON.stringify({ error: "Unauthorized access to thread." }),
+      { status: 403, headers: { "content-type": "application/json" } }
     );
   }
 

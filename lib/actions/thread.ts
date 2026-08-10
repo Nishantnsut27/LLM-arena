@@ -64,6 +64,14 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
     throw new Error("Thread not found");
   }
 
+  if (!dbUserId) {
+    throw new Error("Unauthorized");
+  }
+
+  if (thread.userId && thread.userId !== dbUserId) {
+    throw new Error("Unauthorized to add turns to this thread");
+  }
+
   const models = await getFreeModels();
   const selectedModels = models.filter(m => modelIds.includes(m.id));
 
