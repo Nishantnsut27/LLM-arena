@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { notFound } from "next/navigation";
+import { notFound, forbidden } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { TurnView, type TurnData } from "@/features/arena/components/turn-view";
 import { ArenaComposer } from "@/features/arena/components/arena-composer";
@@ -41,16 +41,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
     .protect(req);
 
   if (decision.isDenied()) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 text-center">
-        <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-        <p className="text-muted-foreground">
-          {decision.reason.isRateLimit() 
-            ? "You've requested this page too many times recently. Please wait a moment." 
-            : "Your request was blocked by our security policies."}
-        </p>
-      </div>
-    );
+    forbidden();
   }
   
   // Find the thread
