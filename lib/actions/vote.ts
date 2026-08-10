@@ -20,7 +20,7 @@ export async function castVoteAction(turnId: string, winnerModelId: string) {
 
   const selectedResponse = turn.responses.find(r => r.modelId === winnerModelId);
   if (!selectedResponse) throw new Error("Invalid model selection");
-  if (selectedResponse.status !== "COMPLETE") throw new Error("Selected model did not complete successfully");
+  if (selectedResponse.status !== "complete") throw new Error("Selected model did not complete successfully");
 
   const vote = await prisma.vote.create({
     data: {

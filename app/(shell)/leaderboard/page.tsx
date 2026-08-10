@@ -1,14 +1,34 @@
-export default function LeaderboardPlaceholder() {
+import { auth } from "@clerk/nextjs/server";
+import { getLeaderboardStandings } from "@/features/leaderboard/leaderboard-standings";
+import { LeaderboardScreen } from "@/features/leaderboard/leaderboard-screen";
+import { prisma } from "@/lib/db";
+
+export default async function LeaderboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
+  const isPersonal = view === "me";
+  const { userId: clerkId } = await auth();
+
+  let dbUserId: string | null = null;
+  if (isPersonal && clerkId) {
+    const user = await prisma.user.findUnique({ where: { clerkId } });
+    if (user) dbUserId = user.id;
+  }
+
+  // If it's a personal view but the user has no DB record, they have no stats.
+  // We must not pass null to getLeaderboardStandings, as null means "global".
+  const rows = isPersonal 
+    ? (dbUserId ? await getLeaderboardStandings(dbUserId) : [])
+    : await getLeaderboardStandings(null);
+
   return (
-    <div className="p-8 max-w-3xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <div className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-        Placeholder
-      </div>
-      <h1 className="font-serif text-4xl mb-4">Global & Personal Leaderboards</h1>
-      <p className="text-muted-foreground mb-8">
-        This frame will be replaced by the real Leaderboard (Feature 9) where the standings are truly calculated.
-      </p>
-      {/* Feature 9 will kill this placeholder */}
-    </div>
+    <LeaderboardScreen
+      rows={rows}
+      view={isPersonal ? "personal" : "global"}
+      isSignedIn={!!clerkId}
+    />
   );
 }
