@@ -18,8 +18,11 @@ export default async function LeaderboardPage({
     if (user) dbUserId = user.id;
   }
 
-  const scopeUserId = isPersonal && dbUserId ? dbUserId : null;
-  const rows = isPersonal && !clerkId ? [] : await getLeaderboardStandings(scopeUserId);
+  // If it's a personal view but the user has no DB record, they have no stats.
+  // We must not pass null to getLeaderboardStandings, as null means "global".
+  const rows = isPersonal 
+    ? (dbUserId ? await getLeaderboardStandings(dbUserId) : [])
+    : await getLeaderboardStandings(null);
 
   return (
     <LeaderboardScreen

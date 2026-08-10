@@ -57,10 +57,13 @@ export async function getLeaderboardStandings(scopeUserId: string | null): Promi
     }
 
     const stats = statsMap.get(response.modelId)!;
-    stats.total += 1;
 
-    if (response.turn.vote?.winnerModelId === response.modelId) {
-      stats.wins += 1;
+    // Only count as part of the win/loss denominator if the user actually cast a vote for this turn
+    if (response.turn.vote) {
+      stats.total += 1;
+      if (response.turn.vote.winnerModelId === response.modelId) {
+        stats.wins += 1;
+      }
     }
 
     if (response.timeToFirstToken !== null) {
