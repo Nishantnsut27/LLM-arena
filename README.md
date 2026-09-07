@@ -1,7 +1,7 @@
 # LLM Arena
 > A modern, open-source platform for head-to-head evaluation of Large Language Models.
 
-**Live Demo**: [Live Demo](https://llmarenaai.vercel.app/)
+**Live Demo**: [LLM Arena](https://llmarena.nishantraj.tech/)
 
 ## Overview
 LLM Arena is an interactive application designed to crowdsource human preference for various Large Language Models (LLMs). The subjective nature of AI responses makes traditional benchmarks insufficient for judging model quality. LLM Arena solves this by allowing users to prompt up to three different models simultaneously. Users evaluate the responses side-by-side and vote for the best one. The resulting data powers an honest, community-driven leaderboard.
