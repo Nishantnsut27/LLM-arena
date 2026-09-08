@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ModelResponseCard } from "./model-response-card";
 import { type UIMessage } from "ai";
-import { streamModelAnswer, type StreamOutcome, type ModelMetrics } from "../stream-model-answer";
+import { streamModelAnswer, type ModelMetrics } from "../stream-model-answer";
 
 interface StreamingModelResponseCardProps {
   turnId: string;
@@ -15,6 +15,8 @@ interface StreamingModelResponseCardProps {
   canVote?: boolean;
   isWinner?: boolean;
   onVote?: () => void;
+  onRetry?: () => void;
+  isFree?: boolean;
 }
 
 export function StreamingModelResponseCard({
@@ -26,7 +28,9 @@ export function StreamingModelResponseCard({
   onFinish,
   canVote,
   isWinner,
-  onVote
+  onVote,
+  onRetry,
+  isFree,
 }: StreamingModelResponseCardProps) {
   const [hasStarted, setHasStarted] = useState(false);
   const [status, setStatus] = useState<"streaming" | "complete" | "failed">("streaming");
@@ -88,6 +92,11 @@ export function StreamingModelResponseCard({
       timeToFirstToken={metrics?.timeToFirstToken}
       tokensPerSecond={metrics?.tokensPerSecond}
       totalTokens={metrics?.totalTokens}
+      inputTokens={metrics?.inputTokens}
+      outputTokens={metrics?.outputTokens}
+      estimatedCost={metrics?.estimatedCost}
+      isFree={isFree}
+      onRetry={onRetry}
     />
   );
 }

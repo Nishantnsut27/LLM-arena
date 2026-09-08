@@ -3,6 +3,7 @@
 import { Check } from "lucide-react";
 import { type UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
+import { formatEstimatedCost } from "@/lib/arena-cost";
 
 export interface ModelResponseCardProps {
   modelId: string;
@@ -12,6 +13,11 @@ export interface ModelResponseCardProps {
   timeToFirstToken?: number | null;
   tokensPerSecond?: number | null;
   totalTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  estimatedCost?: number | null;
+  isFree?: boolean;
+  onRetry?: () => void;
   isWinner?: boolean;
   canVote?: boolean;
   onVote?: () => void;
@@ -28,30 +34,39 @@ export function ModelResponseCard({
   timeToFirstToken,
   tokensPerSecond,
   totalTokens,
+  inputTokens,
+  outputTokens,
+  estimatedCost,
+  isFree,
   isWinner,
   canVote,
   onVote,
   messages,
   isLoading,
-  error
+  error,
+  onRetry,
 }: ModelResponseCardProps) {
   // In AI SDK v7, UIMessage has NO `content` field — text lives in `parts`
   // as { type: 'text', text: string } entries. `content` is undefined in v7.
+  const textOf = (p: unknown): string =>
+    typeof p === "object" &&
+    p !== null &&
+    (p as { type?: unknown }).type === "text" &&
+    typeof (p as { text?: unknown }).text === "string"
+      ? (p as { text: string }).text
+      : "";
   const extractText = (msg: UIMessage | undefined): string | null => {
     if (!msg) return null;
     // Primary: AI SDK v7 parts array
     if (Array.isArray(msg.parts) && msg.parts.length > 0) {
-      const text = msg.parts
-        .filter((p: any) => p.type === "text")
-        .map((p: any) => p.text as string)
-        .join("");
+      const text = msg.parts.map(textOf).join("");
       if (text) return text;
     }
     // Fallback: older AI SDK versions that put text in `content` as a string
-    const content = (msg as any).content;
+    const content = (msg as UIMessage & { content?: unknown }).content;
     if (typeof content === "string" && content) return content;
     if (Array.isArray(content)) {
-      const text = content.filter((p: any) => p.type === "text").map((p: any) => p.text).join("");
+      const text = content.map(textOf).join("");
       if (text) return text;
     }
     return null;
@@ -64,8 +79,13 @@ export function ModelResponseCard({
   const renderContent = () => {
     if (status === "failed" || error) {
       return (
-        <span className="text-destructive font-medium flex items-center gap-2">
-          <span>Not available right now. Please change the model.</span>
+        <span className="text-destructive font-medium flex items-center justify-between gap-2">
+          <span>Not available right now.</span>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="rounded-full border border-destructive/40 px-3 py-1 text-xs hover:bg-destructive/10">
+              Retry
+            </button>
+          )}
         </span>
       );
     }
@@ -104,7 +124,7 @@ export function ModelResponseCard({
             Winner
           </span>
         )}
-        {!isWinner && canVote && status !== "failed" && !error && (
+        {!isWinner && canVote && status === "complete" && !error && (
           <button 
             onClick={onVote}
             className="text-xs px-3 py-1 rounded-full border shadow-sm bg-background hover:bg-muted transition-colors font-medium shrink-0 ml-2"
@@ -137,12 +157,26 @@ export function ModelResponseCard({
             <div className="flex items-center gap-2">
               <span className="opacity-70">tokens</span>
               <span className={totalTokens != null ? "font-medium text-foreground" : "opacity-50"}>
-                {totalTokens != null ? totalTokens : "—"}
+                {totalTokens != null ? totalTokens.toLocaleString() : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">input</span>
+              <span className={inputTokens != null ? "font-medium text-foreground" : "opacity-50"}>
+                {inputTokens != null ? inputTokens.toLocaleString() : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="opacity-70">output</span>
+              <span className={outputTokens != null ? "font-medium text-foreground" : "opacity-50"}>
+                {outputTokens != null ? outputTokens.toLocaleString() : "—"}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="opacity-70">cost</span>
-              <span className="font-medium text-foreground">$0.0000</span>
+              <span className={estimatedCost != null ? "font-medium text-foreground" : "opacity-50"}>
+                {formatEstimatedCost(estimatedCost, isFree)}
+              </span>
             </div>
           </div>
         </div>

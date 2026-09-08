@@ -9,11 +9,11 @@ const describe = (pathname: string): readonly string[] => {
   if (pathname.startsWith("/t/")) return ["Arena", `Thread ${pathname.slice(3)}`];
   if (pathname.startsWith("/leaderboard")) return ["Leaderboard"];
   if (pathname.startsWith("/models")) return ["Models"];
+  if (pathname.startsWith("/compare")) return ["Compare"];
   return ["Arena"];
 };
 
 const ShareButton = () => {
-  const pathname = usePathname();
   const [copied, setCopied] = useState(false);
 
   const copyLink = async () => {

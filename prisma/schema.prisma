@@ -29,6 +29,9 @@ model Thread {
   userId    String?
   user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   turns     Turn[]
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Turn {
@@ -40,6 +43,9 @@ model Turn {
 
   responses ModelResponse[]
   vote      Vote?
+
+  @@index([threadId])
+  @@index([createdAt])
 }
 
 model ModelResponse {
@@ -59,6 +65,9 @@ model ModelResponse {
   createdAt         DateTime @default(now())
 
   @@unique([turnId, modelId])
+  @@index([modelId])
+  @@index([turnId])
+  @@index([createdAt])
 }
 
 model Vote {
@@ -69,4 +78,8 @@ model Vote {
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   winnerModelId String
   createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([winnerModelId])
+  @@index([createdAt])
 }

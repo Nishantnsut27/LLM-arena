@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { type UIMessage } from "ai";
 import { ModelResponseCard } from "./model-response-card";
 import { StreamingModelResponseCard } from "./streaming-model-response-card";
 import { castVoteAction } from "@/lib/actions/vote";
+import { retryModelResponseAction } from "@/lib/actions/thread";
 import { useClerk } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 export interface TurnResponse {
   id: string;
@@ -16,6 +17,10 @@ export interface TurnResponse {
   timeToFirstToken?: number | null;
   tokensPerSecond?: number | null;
   totalTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  costUsd?: number | null;
+  isFree?: boolean;
 }
 
 export interface TurnData {
@@ -39,9 +44,12 @@ import { buildModelMessages } from "../model-messages";
 
 export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = false }: TurnViewProps) {
   const clerk = useClerk();
+  const router = useRouter();
   const [completedStreams, setCompletedStreams] = useState<Set<string>>(new Set());
   const [hasVoted, setHasVoted] = useState(!!turn.vote);
   const [winnerId, setWinnerId] = useState<string | null>(turn.vote?.winnerModelId || null);
+  const [voteError, setVoteError] = useState<string | null>(null);
+  const [retryingModelId, setRetryingModelId] = useState<string | null>(null);
 
   /**
    * Non-owners never trigger streaming. This mirrors the demo's approach exactly:
@@ -54,12 +62,11 @@ export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = 
     return response.status;
   };
 
-  const isStreamingTurn = isOwner && turn.responses.some(r => r.status === "streaming");
-
+  const completedResponseCount = turn.responses.filter((response) => response.status === "complete").length;
   // A vote is allowed if:
   // 1. It hasn't been voted on yet
   // 2. Either it's a historical turn (not streaming) OR at least 2 streams have completed
-  const canVote = !hasVoted && (!isStreamingTurn || completedStreams.size >= 2);
+  const canVote = !hasVoted && completedResponseCount + completedStreams.size >= 2;
 
   const handleVote = async (modelId: string) => {
     // Non-logged-in users → open sign in modal
@@ -68,14 +75,31 @@ export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = 
       return;
     }
     if (!canVote) return;
+    setVoteError(null);
     setHasVoted(true);
     setWinnerId(modelId);
     try {
       await castVoteAction(turn.id, modelId);
     } catch (e) {
+      const message = e instanceof Error ? e.message : "Your vote could not be recorded.";
+      setVoteError(message);
       console.error("Failed to cast vote", e);
       setHasVoted(false);
       setWinnerId(null);
+      router.refresh();
+    }
+  };
+
+  const handleRetry = async (modelId: string) => {
+    if (!isOwner || retryingModelId) return;
+    setRetryingModelId(modelId);
+    try {
+      await retryModelResponseAction(turn.id, modelId);
+      router.refresh();
+    } catch (error) {
+      setVoteError(error instanceof Error ? error.message : "This response could not be retried.");
+    } finally {
+      setRetryingModelId(null);
     }
   };
 
@@ -105,6 +129,8 @@ export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = 
                 canVote={canVote && !hasVoted}
                 isWinner={isWinner}
                 onVote={() => handleVote(response.modelId)}
+                onRetry={() => handleRetry(response.modelId)}
+                isFree={response.isFree}
                 onFinish={(s) => {
                   if (s === "complete") {
                     setCompletedStreams(prev => new Set([...Array.from(prev), response.modelId]));
@@ -125,9 +151,14 @@ export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = 
               timeToFirstToken={response.timeToFirstToken}
               tokensPerSecond={response.tokensPerSecond}
               totalTokens={response.totalTokens}
+              inputTokens={response.inputTokens}
+              outputTokens={response.outputTokens}
+              estimatedCost={response.costUsd}
+              isFree={response.isFree}
               canVote={canVote}
               isWinner={isWinner}
               onVote={() => handleVote(response.modelId)}
+              onRetry={response.status === "failed" && isOwner ? () => handleRetry(response.modelId) : undefined}
             />
           );
         })}
@@ -139,6 +170,13 @@ export function TurnView({ turn, historicalTurns, isOwner = false, isSignedIn = 
           {isSignedIn
             ? "Pick the best answer — your vote marks the winner."
             : "Sign in to vote on this thread."}
+        </div>
+      )}
+      {voteError && <p role="alert" className="text-center text-sm text-destructive">{voteError}</p>}
+      {hasVoted && winnerId && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-center text-sm">
+          <div className="font-semibold text-primary">🏆 You picked {turn.responses.find((response) => response.modelId === winnerId)?.modelNameSnapshot ?? winnerId}</div>
+          <div className="text-muted-foreground">Your vote has been recorded and is final.</div>
         </div>
       )}
     </div>

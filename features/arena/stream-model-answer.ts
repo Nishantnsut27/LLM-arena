@@ -3,13 +3,19 @@ import { parseJsonEventStream, readUIMessageStream, uiMessageChunkSchema, type U
 export type StreamOutcome = "COMPLETE" | "FAILED";
 
 export type ModelMetrics = {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
   timeToFirstToken?: number | null;
   tokensPerSecond?: number | null;
   totalTokens?: number | null;
+  estimatedCost?: number | null;
 };
 
 const extractText = (message: UIMessage): string => {
-  if (!message.parts) return (message as any).content || "";
+  if (!message.parts) {
+    const content = (message as UIMessage & { content?: unknown }).content;
+    return typeof content === "string" ? content : "";
+  }
   return message.parts.reduce(
     (text, part) => (part.type === "text" ? text + part.text : text),
     "",
@@ -19,7 +25,7 @@ const extractText = (message: UIMessage): string => {
 export const streamModelAnswer = async (params: {
   readonly modelId: string;
   readonly turnId: string;
-  readonly messages: any[];
+  readonly messages: unknown[];
   readonly onTextUpdate: (text: string) => void;
   readonly onMetricsUpdate?: (metrics: ModelMetrics) => void;
   readonly onDone: (status: StreamOutcome, metrics: ModelMetrics | null) => void;
@@ -83,6 +89,8 @@ export const streamModelAnswer = async (params: {
         params.onMetricsUpdate({
           timeToFirstToken: ttft,
           tokensPerSecond: tps ? parseFloat(tps.toFixed(1)) : null,
+          inputTokens: null,
+          outputTokens: null,
           totalTokens: approxTokens
         });
       }
