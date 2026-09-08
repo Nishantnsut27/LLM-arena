@@ -3,19 +3,21 @@ import { SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { LogIn, Trophy, Layers, MessageSquare, Menu } from "lucide-react";
+import { Trophy, Layers, Menu, Columns2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { listThreadHistory } from "@/features/shell/thread-history";
+import type { ThreadGroup } from "@/features/shell/thread-groups";
 import { TopBar } from "@/components/top-bar";
+import { NavItem } from "@/components/nav-item";
 
 export default async function ShellLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
   
-  let threadGroups: any[] = [];
+  let threadGroups: readonly ThreadGroup[] = [];
   if (userId) {
     const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
     if (dbUser) {
-      threadGroups = (await listThreadHistory(dbUser.id)) as any[];
+      threadGroups = await listThreadHistory(dbUser.id);
     }
   }
 
@@ -31,9 +33,10 @@ export default async function ShellLayout({ children }: { children: ReactNode })
 
         {/* Main Nav (Fixed) */}
         <nav className="px-4 py-2 space-y-0.5 shrink-0">
-          <NavItem href="/" icon={<Menu size={18} />} label="Arena" active />
+          <NavItem href="/" icon={<Menu size={18} />} label="Arena" />
           <NavItem href="/leaderboard" icon={<Trophy size={18} />} label="Leaderboard" />
           <NavItem href="/models" icon={<Layers size={18} />} label="Models" />
+          <NavItem href="/compare" icon={<Columns2 size={18} />} label="Compare" />
         </nav>
 
         {/* Thread List (Scrollable) */}
@@ -53,7 +56,7 @@ export default async function ShellLayout({ children }: { children: ReactNode })
                       {group.label}
                     </h5>
                     <div className="space-y-0.5">
-                      {group.threads.map((thread: any) => (
+                      {group.threads.map((thread) => (
                         <ThreadItem
                           key={thread.id}
                           href={`/t/${thread.id}`}
@@ -103,18 +106,6 @@ export default async function ShellLayout({ children }: { children: ReactNode })
         </div>
       </div>
     </div>
-  );
-}
-
-function NavItem({ href, icon, label, active }: { href: string; icon: ReactNode; label: string; active?: boolean }) {
-  return (
-    <Link 
-      href={href}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all-150 ${active ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/30'}`}
-    >
-      {icon}
-      {label}
-    </Link>
   );
 }
 

@@ -6,6 +6,41 @@ import type { ModelCatalogItem } from "@/lib/infrastructure/model-catalog";
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 import { revalidatePath } from "next/cache";
 
+export async function retryModelResponseAction(turnId: string, modelId: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
+  if (!dbUser) throw new Error("User not found");
+
+  const response = await prisma.modelResponse.findFirst({
+    where: {
+      turnId,
+      modelId,
+      status: "failed",
+      turn: { thread: { userId: dbUser.id } },
+    },
+    select: { id: true, turn: { select: { threadId: true, vote: { select: { id: true } } } } },
+  });
+  if (!response || response.turn.vote) throw new Error("This response cannot be retried");
+
+  const updated = await prisma.modelResponse.updateMany({
+    where: { id: response.id, status: "failed" },
+    data: {
+      status: "streaming",
+      text: null,
+      timeToFirstToken: null,
+      tokensPerSecond: null,
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      costUsd: null,
+    },
+  });
+  if (updated.count !== 1) throw new Error("This response is already being retried");
+  revalidatePath(`/t/${response.turn.threadId}`);
+}
+
 export async function createThreadAction(prompt: string, models: ModelCatalogItem[]) {
   const { userId } = await auth();
 
@@ -19,6 +54,19 @@ export async function createThreadAction(prompt: string, models: ModelCatalogIte
      dbUserId = dbUser.id;
   }
 
+  if (!prompt.trim() || !Array.isArray(models)) {
+    throw new Error("A prompt and at least one model are required");
+  }
+
+  const catalog = await getFreeModels();
+  const selectedModels = catalog.filter((catalogModel) =>
+    models.some((model) => model.id === catalogModel.id),
+  ).slice(0, 3);
+
+  if (selectedModels.length === 0) {
+    throw new Error("No valid models selected");
+  }
+
   const thread = await prisma.thread.create({
     data: {
       userId: dbUserId,
@@ -27,7 +75,7 @@ export async function createThreadAction(prompt: string, models: ModelCatalogIte
         create: {
           prompt,
           responses: {
-            create: models.map(m => ({
+               create: selectedModels.map(m => ({
               modelId: m.id,
               modelNameSnapshot: m.name,
               status: "streaming",
@@ -66,6 +114,10 @@ export async function createTurnAction(threadId: string, prompt: string, modelId
 
   if (!dbUserId) {
     throw new Error("Unauthorized");
+  }
+
+  if (!prompt.trim() || !Array.isArray(modelIds)) {
+    throw new Error("A prompt and at least one model are required");
   }
 
   // We will either use the existing thread or create a new one (forking)

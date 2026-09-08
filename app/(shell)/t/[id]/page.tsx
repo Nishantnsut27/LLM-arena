@@ -92,7 +92,11 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
       text: res.text,
       timeToFirstToken: res.timeToFirstToken,
       tokensPerSecond: res.tokensPerSecond ? Number(res.tokensPerSecond) : null,
-      totalTokens: res.totalTokens
+      totalTokens: res.totalTokens,
+      inputTokens: res.inputTokens,
+      outputTokens: res.outputTokens,
+      costUsd: res.costUsd,
+      isFree: catalog.some((model) => model.id === res.modelId),
     }))
   }));
 

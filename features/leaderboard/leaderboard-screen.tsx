@@ -15,7 +15,7 @@ export function LeaderboardScreen({ rows, view, isSignedIn }: LeaderboardScreenP
     <div className="w-full max-w-4xl mx-auto px-4 py-8">
       <h1 className="font-serif text-4xl font-bold mb-4">Leaderboard</h1>
       <p className="text-muted-foreground mb-8 text-lg max-w-2xl">
-        Every model's real record, from actual head-to-head votes. No benchmark, no
+        Every model&apos;s real record, from actual head-to-head votes. No benchmark, no
         vendor claim, just what people picked when they saw the answers side by side.
       </p>
 
@@ -62,7 +62,10 @@ export function LeaderboardScreen({ rows, view, isSignedIn }: LeaderboardScreenP
                 <tr>
                   <th className="px-6 py-4 font-semibold">#</th>
                   <th className="px-6 py-4 font-semibold">Model</th>
+                  <th className="px-6 py-4 font-semibold text-right">Rating</th>
                   <th className="px-6 py-4 font-semibold text-right">Win Rate</th>
+                  <th className="px-6 py-4 font-semibold text-right">Battles</th>
+                  <th className="px-6 py-4 font-semibold text-right">Votes</th>
                   <th className="px-6 py-4 font-semibold text-right">To First Token</th>
                   <th className="px-6 py-4 font-semibold text-right">Speed</th>
                 </tr>
@@ -70,44 +73,58 @@ export function LeaderboardScreen({ rows, view, isSignedIn }: LeaderboardScreenP
               <tbody className="divide-y divide-border">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                     <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
                       No completed battles found yet.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row, index) => (
+                   rows.map((row) => (
                     <tr key={row.modelId} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-6 py-4 font-medium">{index + 1}</td>
+                      <td className="px-6 py-4 font-medium">{row.rank ?? "-"}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium uppercase border border-border">
                             {row.modelName.charAt(0)}
                           </div>
-                          <span className="font-medium">{row.modelName}</span>
+                             <div>
+                              <span className="font-medium">{row.modelName}</span>
+                              <div className="text-xs text-muted-foreground">
+                                {row.provisional ? "Provisional" : `Confidence: ${row.confidence}`}
+                              </div>
+                            </div>
+                           <Link href={`/compare?modelA=${encodeURIComponent(row.modelId)}`} className="ml-auto text-xs font-medium text-primary hover:underline">
+                             Compare
+                           </Link>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-lg font-bold text-primary">{row.rating}</span>
+                        <div className="text-xs text-muted-foreground">{row.confidence}</div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex flex-col items-end">
                           <span className="text-lg font-bold text-primary">
-                            {Math.round(row.winRate * 100)}%
+                             {row.winRate == null ? "-" : `${Math.round(row.winRate * 100)}%`}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            won {row.wins} of {row.total}
+                             won {row.wins} of {row.battles}
                           </span>
                         </div>
                         <div className="w-full bg-muted h-1 mt-2 rounded-full overflow-hidden">
                           <div
                             className="bg-primary h-full rounded-full"
-                            style={{ width: `${Math.round(row.winRate * 100)}%` }}
+                             style={{ width: `${row.winRate == null ? 0 : Math.round(row.winRate * 100)}%` }}
                           />
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right font-medium">
-                        {row.avgTimeToFirstToken ? `${row.avgTimeToFirstToken} ms` : "-"}
-                      </td>
-                      <td className="px-6 py-4 text-right font-medium">
-                        {row.avgTokensPerSecond ? `${row.avgTokensPerSecond} tok/s` : "-"}
-                      </td>
+                      <td className="px-6 py-4 text-right font-medium">{row.battles.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-right font-medium">{row.votes.toLocaleString()}</td>
+                       <td className="px-6 py-4 text-right font-medium">
+                         {row.avgTimeToFirstToken != null ? `${row.avgTimeToFirstToken} ms` : "-"}
+                       </td>
+                       <td className="px-6 py-4 text-right font-medium">
+                         {row.avgTokensPerSecond != null ? `${row.avgTokensPerSecond} tok/s` : "-"}
+                       </td>
                     </tr>
                   ))
                 )}

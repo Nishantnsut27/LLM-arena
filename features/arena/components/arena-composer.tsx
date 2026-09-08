@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { ArrowUp, X } from "lucide-react";
 import type { ModelCatalogItem } from "@/lib/infrastructure/model-catalog";
 import { getDefaultTrio } from "@/lib/infrastructure/model-catalog";
@@ -17,40 +17,43 @@ interface ArenaComposerProps {
 
 export function ArenaComposer({ catalog, threadId, defaultSelection }: ArenaComposerProps) {
   const { isSignedIn } = useAuth();
-  const [selectedModels, setSelectedModels] = useState<ModelCatalogItem[]>([]);
+  // The defaults are derived during render (no effect/setState) so the
+  // react-hooks/set-state-in-effect rule stays satisfied. Once the user
+  // interacts, their explicit choice wins over subsequently derived defaults.
+  const [userSelection, setUserSelection] = useState<ModelCatalogItem[] | null>(null);
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Initialize selected models
-  useEffect(() => {
-    if (catalog.length === 0) return;
-    
+  const defaultModels = useMemo(() => {
+    if (catalog.length === 0) return [];
     if (defaultSelection && defaultSelection.length > 0) {
-      const initialModels = catalog.filter(m => defaultSelection.includes(m.id));
-      setSelectedModels(initialModels.length > 0 ? initialModels : getDefaultTrio(catalog));
-    } else if (!threadId) {
-      setSelectedModels(getDefaultTrio(catalog));
+      const initialModels = catalog.filter((m) => defaultSelection.includes(m.id));
+      return initialModels.length > 0 ? initialModels : getDefaultTrio(catalog);
     }
+    if (!threadId) return getDefaultTrio(catalog);
+    return [];
   }, [catalog, threadId, defaultSelection]);
 
+  const selectedModels = userSelection ?? defaultModels;
+
   const toggleModel = (model: ModelCatalogItem) => {
-    setSelectedModels((prev) => {
-      const isSelected = prev.some((m) => m.id === model.id);
-      if (isSelected) {
-        if (prev.length <= 1) return prev; // Floor of 1
-        return prev.filter((m) => m.id !== model.id);
-      }
-      if (prev.length >= 3) return prev; // Cap of 3
-      return [...prev, model];
-    });
+    const prev = selectedModels;
+    const isSelected = prev.some((m) => m.id === model.id);
+    if (isSelected) {
+      if (prev.length <= 1) return; // Floor of 1
+      setUserSelection(prev.filter((m) => m.id !== model.id));
+      return;
+    }
+    if (prev.length >= 3) return; // Cap of 3
+    setUserSelection([...prev, model]);
   };
 
   const removeModel = (id: string) => {
     if (selectedModels.length <= 1) return;
-    setSelectedModels((prev) => prev.filter((m) => m.id !== id));
+    setUserSelection(selectedModels.filter((m) => m.id !== id));
   };
 
   const handleSubmit = async () => {

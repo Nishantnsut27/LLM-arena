@@ -11,6 +11,7 @@ import { slidingWindow, detectPromptInjection } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
 import { prisma } from "@/lib/db";
+import { calculateEstimatedCost } from "@/lib/arena-cost";
 
 const routeAj = aj.withRule(
   slidingWindow({
@@ -36,17 +37,6 @@ type ChatRequest = {
   modelId: string;
   turnId: string;
   messages: Array<Omit<UIMessage, "id">>;
-};
-
-type ModelMetadata = {
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
-  timingMs: number;
-  timeToFirstTokenMs: number | null;
-  tokensPerSecond: number | null;
 };
 
 export const runtime = "nodejs";
@@ -86,7 +76,8 @@ export async function POST(request: Request) {
 
   // Security validation: verify model is actually free and known
   const freeModels = await getFreeModels();
-  const isApproved = freeModels.some((m) => m.id === body.modelId);
+  const selectedCatalogModel = freeModels.find((m) => m.id === body.modelId);
+  const isApproved = !!selectedCatalogModel;
   
   if (!isApproved) {
     return new Response(
@@ -98,9 +89,9 @@ export async function POST(request: Request) {
   const dbUser = await prisma.user.findUnique({ where: { clerkId: userId } });
   
   // Verify the turn exists and belongs to the authenticated user's thread
-  const turn = await prisma.turn.findUnique({ 
+  const turn = await prisma.turn.findUnique({
     where: { id: body.turnId },
-    include: { thread: true }
+    include: { thread: true, responses: true },
   });
 
   if (!turn || (turn.thread.userId && turn.thread.userId !== dbUser?.id)) {
@@ -110,8 +101,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const latestMessage = body.messages[body.messages.length - 1] as any;
-  const promptText = typeof latestMessage?.content === "string" ? latestMessage.content : "";
+  const responseRecord = turn.responses.find((response) => response.modelId === body.modelId);
+  if (!responseRecord) {
+    return new Response(JSON.stringify({ error: "This model is not part of the selected battle." }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (responseRecord.status !== "streaming") {
+    return new Response(JSON.stringify({ error: "This response is not available for another generation." }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const latestMessage = body.messages[body.messages.length - 1] as
+    | { content?: unknown }
+    | undefined;
+  const promptText =
+    latestMessage && typeof latestMessage.content === "string" ? latestMessage.content : "";
 
   const decision = await routeAj.protect(request, {
     detectPromptInjectionMessage: promptText,
@@ -143,9 +151,21 @@ export async function POST(request: Request) {
     const result = await streamText({
       model: openrouter.chat(body.modelId),
       messages: body.messages.map((message) => {
-        const content = (message as any).content || 
-          (Array.isArray(message.parts) 
-            ? message.parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("") 
+        const maybeContent = (message as { content?: unknown }).content;
+        const rawParts = (message as { parts?: unknown }).parts;
+        const content =
+          (typeof maybeContent === "string" && maybeContent) ||
+          (Array.isArray(rawParts)
+            ? rawParts
+                .filter(
+                  (p): p is { type: string; text: string } =>
+                    typeof p === "object" &&
+                    p !== null &&
+                    (p as { type?: unknown }).type === "text" &&
+                    typeof (p as { text?: unknown }).text === "string",
+                )
+                .map((p) => p.text)
+                .join("")
             : "");
             
         return {
@@ -161,7 +181,12 @@ export async function POST(request: Request) {
       onFinish: async ({ text, usage }) => {
         const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
         const ttft = firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt);
-        const tps = streamMs !== null && streamMs > 0 && usage.outputTokens ? (usage.outputTokens / (streamMs / 1000)) : null;
+        const inputTokens = usage.inputTokens ?? null;
+        const outputTokens = usage.outputTokens ?? null;
+        const totalTokens = inputTokens != null && outputTokens != null ? inputTokens + outputTokens : null;
+        const tps = streamMs !== null && streamMs > 0 && outputTokens != null
+          ? outputTokens / (streamMs / 1000)
+          : null;
 
         await prisma.modelResponse.update({
           where: { turnId_modelId: { turnId: body.turnId, modelId: body.modelId } },
@@ -169,10 +194,15 @@ export async function POST(request: Request) {
             status: "complete",
             text,
             timeToFirstToken: ttft,
-            tokensPerSecond: tps ? Number(tps.toFixed(1)) : null,
-            inputTokens: usage.inputTokens ?? 0,
-            outputTokens: usage.outputTokens ?? 0,
-            totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+            tokensPerSecond: tps != null ? Number(tps.toFixed(1)) : null,
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            costUsd: calculateEstimatedCost({
+              inputTokens,
+              outputTokens,
+              pricing: selectedCatalogModel.pricing,
+            }),
           }
         }).catch(console.error);
       },
@@ -189,13 +219,23 @@ export async function POST(request: Request) {
       },
       messageMetadata: ({ part }) => {
         if (part.type === "finish") {
-          const { outputTokens = 0 } = part.totalUsage;
+           const { inputTokens = null, outputTokens = null } = part.totalUsage;
+           const totalTokens = inputTokens != null && outputTokens != null ? inputTokens + outputTokens : null;
           const streamMs = firstTokenAt === null ? null : performance.now() - firstTokenAt;
 
           return {
             timeToFirstToken: firstTokenAt === null ? null : Math.round(firstTokenAt - startedAt),
-            tokensPerSecond: streamMs !== null && streamMs > 0 ? Number((outputTokens / (streamMs / 1000)).toFixed(1)) : null,
-            totalTokens: outputTokens,
+             tokensPerSecond: streamMs !== null && streamMs > 0 && outputTokens != null
+               ? Number((outputTokens / (streamMs / 1000)).toFixed(1))
+               : null,
+             inputTokens,
+             outputTokens,
+             totalTokens,
+             estimatedCost: calculateEstimatedCost({
+               inputTokens,
+               outputTokens,
+               pricing: selectedCatalogModel.pricing,
+             }),
           };
         }
         return undefined;

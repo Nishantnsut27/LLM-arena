@@ -1,4 +1,5 @@
 import { getFreeModels } from "@/lib/infrastructure/model-catalog";
+import Link from "next/link";
 
 export const revalidate = 3600;
 
@@ -21,7 +22,7 @@ export default async function ModelsPage() {
             <div className="text-xs text-muted-foreground font-mono truncate mb-6" title={model.id}>{model.id}</div>
             
             <div className="flex items-center justify-between mt-auto pt-4 border-t border-border/50">
-              <div>
+               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-0.5">Context</div>
                 <div className="font-mono text-sm">{model.formattedContext}</div>
               </div>
@@ -32,8 +33,11 @@ export default async function ModelsPage() {
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-0.5">Price</div>
                 <div className="font-mono text-sm">Free</div>
-              </div>
-            </div>
+               </div>
+               <Link href={`/compare?modelA=${encodeURIComponent(model.id)}`} className="text-xs font-medium text-primary hover:underline">
+                 Compare
+               </Link>
+             </div>
           </div>
         ))}
       </div>

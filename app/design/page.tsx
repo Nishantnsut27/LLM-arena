@@ -150,7 +150,7 @@ export default function Home() {
         </div>
         
         <p className="text-muted-foreground mt-6 text-sm leading-relaxed">
-          Rust and this red measure 1.14:1 against each other, so they are told apart by hue alone. That is why the error carries an icon and a sentence, and the winner above carries the word "Winner". Colour is never the only signal here.
+          Rust and this red measure 1.14:1 against each other, so they are told apart by hue alone. That is why the error carries an icon and a sentence, and the winner above carries the word &quot;Winner&quot;. Colour is never the only signal here.
         </p>
       </section>
 
